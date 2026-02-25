@@ -216,6 +216,19 @@ rotate_log
 # ── Start socat bound to loopback only ───────────────────────
 chmod +x "$API_SCRIPT"
 
+# When managed by systemd, run socat in the foreground so systemd
+# tracks the process correctly. When run manually, background it.
+if [[ -n "$INVOCATION_ID" ]]; then
+  # Running under systemd — exec replaces this bash process with socat
+  ok_msg "socat starting in foreground (systemd mode) on 127.0.0.1:$PORT"
+  echo ""
+  exec socat \
+    TCP-LISTEN:${PORT},bind=127.0.0.1,reuseaddr,fork \
+    EXEC:"$API_SCRIPT" \
+    >>"$LOG_FILE" 2>&1
+  # exec never returns; lines below only run in manual mode
+fi
+
 socat \
   TCP-LISTEN:${PORT},bind=127.0.0.1,reuseaddr,fork \
   EXEC:"$API_SCRIPT" \
@@ -252,8 +265,8 @@ if ! systemctl is-active --quiet daggerconnect-panel 2>/dev/null; then
     After=network.target
 
     [Service]
+    Type=simple
     ExecStart=/bin/bash ${SCRIPT_DIR}/start.sh
-    ExecStop=/bin/bash ${SCRIPT_DIR}/start.sh stop
     Restart=on-failure
     RestartSec=5
     User=root

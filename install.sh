@@ -65,8 +65,8 @@ Description=DaggerConnect Control Panel
 After=network.target
 
 [Service]
+Type=simple
 ExecStart=/bin/bash ${INSTALL_DIR}/start.sh
-ExecStop=/bin/bash ${INSTALL_DIR}/start.sh stop
 Restart=on-failure
 RestartSec=5
 User=root
