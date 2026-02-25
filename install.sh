@@ -57,17 +57,7 @@ for FILE in "${FILES[@]}"; do
 done
 chmod +x "$INSTALL_DIR"/*.sh
 
-# ── Start socat backend ───────────────────────────────────────
-section "Starting panel backend"
-bash "$INSTALL_DIR/start.sh" \
-  || die "start.sh failed — check output above"
-
-# ── Set up nginx ──────────────────────────────────────────────
-section "Setting up nginx"
-bash "$INSTALL_DIR/setup-nginx.sh" \
-  || die "setup-nginx.sh failed — check output above"
-
-# ── Install systemd unit ──────────────────────────────────────
+# ── Install systemd unit and start ───────────────────────────
 section "Installing systemd service"
 cat > /etc/systemd/system/daggerconnect-panel.service <<EOF
 [Unit]
@@ -86,8 +76,15 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable daggerconnect-panel 2>/dev/null \
-  && ok_msg "systemd service enabled (auto-starts on reboot)"
+systemctl enable daggerconnect-panel 2>/dev/null
+systemctl restart daggerconnect-panel 2>/dev/null \
+  && ok_msg "systemd service enabled and started" \
+  || die "systemd service failed to start — check: journalctl -u daggerconnect-panel"
+
+# ── Set up nginx ──────────────────────────────────────────────
+section "Setting up nginx"
+bash "$INSTALL_DIR/setup-nginx.sh" \
+  || die "setup-nginx.sh failed — check output above"
 
 # ── Done ──────────────────────────────────────────────────────
 SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null \
