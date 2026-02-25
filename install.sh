@@ -3,11 +3,11 @@
 # DaggerConnect Control Panel — Installer
 # Clones the repo, installs dependencies, starts the panel,
 # and sets up nginx.
-# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USER/daggerconnect-panel/main/install.sh)
+# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
 # ============================================================
 
 INSTALL_DIR="/opt/daggerconnect-panel"
-REPO_URL="https://github.com/YOUR_USER/daggerconnect-panel"
+REPO_URL="https://github.com/itsFLoKi/daggerconnect-panel"
 PANEL_BRANCH="main"
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'; CYN='\033[0;36m'; NC='\033[0m'
