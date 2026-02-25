@@ -397,9 +397,7 @@ if ! $IS_UPDATE; then
 fi
 echo ""
 echo -e "  ${YLW}Useful commands:${NC}"
-echo "    sudo ${INSTALL_DIR}/start.sh status"
 echo "    sudo ${INSTALL_DIR}/start.sh token"
-echo "    sudo ${INSTALL_DIR}/start.sh logs"
 echo "    sudo $0 change-password"
 echo ""
 echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

@@ -29,7 +29,6 @@ daggerconnect-panel/
 ├── panel.html        ← Browser UI (served by nginx at HTTPS :8443)
 ├── api.sh            ← Bash API handler (called by socat on 127.0.0.1:7070)
 ├── start.sh          ← Starts the socat backend, manages token
-├── setup-nginx.sh    ← Installs nginx, TLS cert, Basic Auth, reverse proxy config
 ├── install.sh        ← One-command installer
 └── README.md
 ```
@@ -66,7 +65,7 @@ api.sh (bash)
 | Layer | Mechanism | Where |
 |---|---|---|
 | 1 | HTTP Basic Auth | nginx — browser native prompt |
-| 2 | Token auth | Panel UI — token printed by `start.sh`, sent as `X-Auth-Token` |
+| 2 | Token auth | Panel UI — token printed by `start.sh token`, sent as `X-Auth-Token` |
 
 ---
 
@@ -107,7 +106,7 @@ The panel adjusts UI labels, nav highlighting, connection view direction, and YA
 bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
 ```
 
-This will: install dependencies, clone the repo to `/opt/daggerconnect-panel`, start the socat backend, run the nginx setup wizard, and install a systemd service so the panel survives reboots.
+This will: install dependencies, clone the repo to `/opt/daggerconnect-panel`, start the socat backend, configure nginx with TLS and Basic Auth, and install a systemd service so the panel survives reboots.
 
 > **Prerequisite:** DaggerConnect must already be installed and either `/etc/DaggerConnect/server.yaml` or `/etc/DaggerConnect/client.yaml` must exist. The installer will abort if neither is found.
 
@@ -120,7 +119,7 @@ This will: install dependencies, clone the repo to `/opt/daggerconnect-panel`, s
 ```bash
 mkdir -p /opt/daggerconnect-panel
 cd /opt/daggerconnect-panel
-for FILE in panel.html api.sh start.sh setup-nginx.sh; do
+for FILE in panel.html api.sh start.sh; do
   curl -fsSL "https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/${FILE}" -o "${FILE}"
 done
 chmod +x *.sh
@@ -135,42 +134,7 @@ apt install socat nginx apache2-utils python3 python3-yaml openssl -y
 apt install libpcap-dev -y
 ```
 
-#### 3. Start the socat backend
-
-```bash
-sudo /opt/daggerconnect-panel/start.sh
-```
-
-The role is detected automatically from your DaggerConnect config. The auth token is printed to the terminal and saved to `/etc/DaggerConnect/panel.token`.
-
-#### 4. Set up nginx
-
-```bash
-sudo /opt/daggerconnect-panel/setup-nginx.sh
-```
-
-This script will:
-- Generate a self-signed TLS certificate (skipped if one already exists)
-- Prompt for an HTTP Basic Auth username and password
-- Write and enable the nginx config
-- Open ports 8443 and 80 in ufw (if available)
-- Run a post-setup healthcheck
-
-#### 5. Open the panel
-
-```
-https://YOUR_VPS_IP:8443
-```
-
-Your browser will warn about the self-signed certificate — click **Advanced → Proceed**. Enter the Basic Auth credentials from step 4, then enter the token from step 3.
-
-> For a trusted certificate: `certbot --nginx -d yourdomain.com`
-
----
-
-## Persistent Service (survives reboot)
-
-The panel process will stop on reboot unless you add a systemd unit. `start.sh` prints the exact unit file on first run. To apply it:
+#### 3. Install the systemd service
 
 ```bash
 cat > /etc/systemd/system/daggerconnect-panel.service <<EOF
@@ -179,8 +143,8 @@ Description=DaggerConnect Control Panel
 After=network.target
 
 [Service]
+Type=simple
 ExecStart=/bin/bash /opt/daggerconnect-panel/start.sh
-ExecStop=/bin/bash /opt/daggerconnect-panel/start.sh stop
 Restart=on-failure
 RestartSec=5
 User=root
@@ -193,6 +157,30 @@ systemctl daemon-reload
 systemctl enable --now daggerconnect-panel
 ```
 
+The role is detected automatically from your DaggerConnect config. Retrieve the auth token with:
+
+```bash
+sudo /opt/daggerconnect-panel/start.sh token
+```
+
+#### 4. Set up nginx
+
+Run the installer which handles TLS cert generation, HTTP Basic Auth setup, nginx config, and firewall rules:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
+```
+
+#### 5. Open the panel
+
+```
+https://YOUR_VPS_IP:8443
+```
+
+Your browser will warn about the self-signed certificate — click **Advanced → Proceed**. Enter the Basic Auth credentials, then enter the token from step 3.
+
+> For a trusted certificate: `certbot --nginx -d yourdomain.com`
+
 ---
 
 ## Useful Commands
@@ -202,26 +190,26 @@ systemctl enable --now daggerconnect-panel
 sudo /opt/daggerconnect-panel/start.sh token
 
 # Check panel status
-sudo /opt/daggerconnect-panel/start.sh status
+systemctl status daggerconnect-panel
 
-# Stop / start panel
-sudo /opt/daggerconnect-panel/start.sh stop
-sudo /opt/daggerconnect-panel/start.sh
+# Stop / start / restart panel
+systemctl stop daggerconnect-panel
+systemctl start daggerconnect-panel
+systemctl restart daggerconnect-panel
 
 # Follow panel logs
-sudo /opt/daggerconnect-panel/start.sh logs
-# or:
-tail -f /tmp/daggerconnect-panel.log
+journalctl -u daggerconnect-panel -f
 
 # Follow nginx access log
 tail -f /var/log/nginx/dagger-panel-access.log
 
 # Change nginx Basic Auth password
-sudo /opt/daggerconnect-panel/setup-nginx.sh change-password
+sudo bash /opt/daggerconnect-panel/install.sh change-password
 
 # Regenerate auth token
 sudo rm /etc/DaggerConnect/panel.token
-sudo /opt/daggerconnect-panel/start.sh
+systemctl restart daggerconnect-panel
+sudo /opt/daggerconnect-panel/start.sh token
 ```
 
 ---
