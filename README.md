@@ -14,7 +14,6 @@ A secure, browser-based control panel for managing [DaggerConnect](https://githu
 - **Live metrics** — CPU, RAM, bandwidth history (up to 4 hours at 5s resolution)
 - **Connections view** — role-aware active connection list via `ss`
 - **Port maps** — parsed from `listeners[].maps[]` in server YAML
-- **PSK generator** — cryptographically random pre-shared key generation
 - **TLS cert tool** — generate self-signed certs for DaggerConnect listeners
 - **DaggerMux helper** — FEC calculator, TCP flag profiles, one-click iptables NOTRACK rules
 - **Service control** — start / stop / restart / enable / disable via `systemctl`
@@ -29,8 +28,9 @@ A secure, browser-based control panel for managing [DaggerConnect](https://githu
 daggerconnect-panel/
 ├── panel.html        ← Browser UI (served by nginx at HTTPS :8443)
 ├── api.sh            ← Bash API handler (called by socat on 127.0.0.1:7070)
-├── start.sh          ← Starts the socat backend, manages token and role
+├── start.sh          ← Starts the socat backend, manages token
 ├── setup-nginx.sh    ← Installs nginx, TLS cert, Basic Auth, reverse proxy config
+├── install.sh        ← One-command installer
 └── README.md
 ```
 
@@ -72,21 +72,16 @@ api.sh (bash)
 
 ## Server vs Client — Two-VPS Setup
 
-Install the panel on **both** VPSes. The **role** tells the panel which side it is on.
+Install the panel on **both** VPSes. The role is detected automatically:
 
-| Role | VPS | DaggerConnect mode |
-|---|---|---|
-| `server` | Iran / relay VPS | `mode: "server"` — receives tunnel connections |
-| `client` | Foreign / exit VPS | `mode: "client"` — connects outward to the server |
+| YAML file present | Detected role |
+|---|---|
+| `/etc/DaggerConnect/server.yaml` | `server` — Iran / relay VPS |
+| `/etc/DaggerConnect/client.yaml` | `client` — Foreign / exit VPS |
 
-The role is set interactively on first start, or manually:
+The panel will refuse to start if neither file exists. Install and configure DaggerConnect first, then run the panel installer.
 
-```bash
-sudo ./start.sh role server    # Iran VPS
-sudo ./start.sh role client    # Foreign VPS
-```
-
-The panel adjusts UI labels, nav highlighting, connection view direction, and YAML templates based on the role.
+The panel adjusts UI labels, nav highlighting, connection view direction, and YAML templates based on the detected role.
 
 ---
 
@@ -104,22 +99,30 @@ The panel adjusts UI labels, nav highlighting, connection view direction, and YA
 
 ---
 
-## Setup
+## Installation
 
-### 1. Upload to both VPSes
+### One-command install (recommended)
 
 ```bash
-scp -r daggerconnect-panel/ root@IRAN_VPS:/opt/daggerconnect-panel/
-scp -r daggerconnect-panel/ root@FOREIGN_VPS:/opt/daggerconnect-panel/
+bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
 ```
 
-### 2. Make scripts executable
+This will: install dependencies, clone the repo to `/opt/daggerconnect-panel`, start the socat backend, run the nginx setup wizard, and install a systemd service so the panel survives reboots.
+
+> **Prerequisite:** DaggerConnect must already be installed and either `/etc/DaggerConnect/server.yaml` or `/etc/DaggerConnect/client.yaml` must exist. The installer will abort if neither is found.
+
+---
+
+### Manual setup
+
+#### 1. Clone the repo
 
 ```bash
+git clone https://github.com/itsFLoKi/daggerconnect-panel /opt/daggerconnect-panel
 chmod +x /opt/daggerconnect-panel/*.sh
 ```
 
-### 3. Install dependencies
+#### 2. Install dependencies
 
 ```bash
 apt install socat nginx apache2-utils python3 python3-yaml openssl -y
@@ -128,34 +131,34 @@ apt install socat nginx apache2-utils python3 python3-yaml openssl -y
 apt install libpcap-dev -y
 ```
 
-### 4. Start the socat backend
+#### 3. Start the socat backend
 
 ```bash
 sudo /opt/daggerconnect-panel/start.sh
 ```
 
-On first run you will be asked whether this is the **server** (Iran/relay) or **client** (foreign/exit) VPS. The role is saved to `/etc/DaggerConnect/panel.role`. The auth token is printed to the terminal and saved to `/etc/DaggerConnect/panel.token`.
+The role is detected automatically from your DaggerConnect config. The auth token is printed to the terminal and saved to `/etc/DaggerConnect/panel.token`.
 
-### 5. Set up nginx
+#### 4. Set up nginx
 
 ```bash
 sudo /opt/daggerconnect-panel/setup-nginx.sh
 ```
 
-This script automatically:
-- Generates a self-signed TLS certificate (skipped if one already exists)
-- Prompts for an HTTP Basic Auth username and password
-- Writes and enables the nginx config
-- Opens ports 8443 and 80 in ufw (if available)
-- Runs a post-setup healthcheck
+This script will:
+- Generate a self-signed TLS certificate (skipped if one already exists)
+- Prompt for an HTTP Basic Auth username and password
+- Write and enable the nginx config
+- Open ports 8443 and 80 in ufw (if available)
+- Run a post-setup healthcheck
 
-### 6. Open the panel
+#### 5. Open the panel
 
 ```
 https://YOUR_VPS_IP:8443
 ```
 
-Your browser will warn about the self-signed certificate — click **Advanced → Proceed**. Enter the Basic Auth credentials you set in step 5, then enter the token printed in step 4.
+Your browser will warn about the self-signed certificate — click **Advanced → Proceed**. Enter the Basic Auth credentials from step 4, then enter the token from step 3.
 
 > For a trusted certificate: `certbot --nginx -d yourdomain.com`
 
@@ -191,11 +194,6 @@ systemctl enable --now daggerconnect-panel
 ## Useful Commands
 
 ```bash
-# Set / check node role
-sudo /opt/daggerconnect-panel/start.sh role
-sudo /opt/daggerconnect-panel/start.sh role server
-sudo /opt/daggerconnect-panel/start.sh role client
-
 # View the auth token
 sudo /opt/daggerconnect-panel/start.sh token
 
