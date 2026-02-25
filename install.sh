@@ -1,7 +1,10 @@
 #!/bin/bash
 # ============================================================
-# DaggerConnect Control Panel — Installer / Updater
-# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
+# DaggerConnect Control Panel — Installer / Updater / Uninstaller
+# Usage:
+#   Install / Update : sudo bash daggerconnect-panel.sh
+#   Uninstall        : sudo bash daggerconnect-panel.sh uninstall
+#   Change password  : sudo bash daggerconnect-panel.sh change-password
 # ============================================================
 
 INSTALL_DIR="/opt/daggerconnect-panel"
@@ -13,6 +16,10 @@ HTPASSWD_FILE="/etc/nginx/.dagger-htpasswd"
 CERT_DIR="/etc/DaggerConnect/panel-tls"
 NGINX_CONF="/etc/nginx/sites-available/daggerconnect-panel"
 NGINX_LINK="/etc/nginx/sites-enabled/daggerconnect-panel"
+TOKEN_FILE="/etc/DaggerConnect/panel.token"
+ROLE_FILE="/etc/DaggerConnect/panel.role"
+PID_FILE="/tmp/daggerconnect-panel.pid"
+LOG_FILE="/tmp/daggerconnect-panel.log"
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'; CYN='\033[0;36m'; NC='\033[0m'
 
@@ -20,6 +27,8 @@ die()      { echo -e "${RED}✗ $1${NC}"; exit 1; }
 ok_msg()   { echo -e "${GRN}✓ $1${NC}"; }
 warn_msg() { echo -e "${YLW}⚠ $1${NC}"; }
 section()  { echo ""; echo -e "${CYN}── $1 ──${NC}"; }
+
+[[ $EUID -ne 0 ]] && die "Must run as root: sudo bash daggerconnect-panel.sh"
 
 echo -e "${CYN}"
 echo "  ██████╗  █████╗  ██████╗  ██████╗ ███████╗██████╗ "
@@ -30,15 +39,133 @@ echo "  ██████╔╝██║  ██║╚██████╔╝�
 echo "  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═╝"
 echo -e "${NC}"
 
-# ── Root check ───────────────────────────────────────────────
-[[ $EUID -ne 0 ]] && die "Must run as root: sudo bash install.sh"
+# ============================================================
+# UNINSTALL
+# ============================================================
+if [[ "$1" == "uninstall" ]]; then
+  echo -e "  Control Panel ${RED}Uninstaller${NC} v1.0.0"
+  echo ""
+  echo -e "${YLW}This will remove the control panel, nginx config, TLS cert, and auth token."
+  echo -e "Your DaggerConnect config files will NOT be touched.${NC}"
+  echo ""
+  read -rp "  Are you sure? [y/N]: " CONFIRM
+  [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+
+  # ── Stop and disable systemd service ───────────────────────
+  section "Stopping service"
+  if systemctl is-active --quiet daggerconnect-panel 2>/dev/null; then
+    systemctl stop daggerconnect-panel && ok_msg "Service stopped"
+  else
+    warn_msg "Service was not running"
+  fi
+  systemctl disable daggerconnect-panel 2>/dev/null && ok_msg "Service disabled"
+  rm -f /etc/systemd/system/daggerconnect-panel.service
+  systemctl daemon-reload
+  ok_msg "systemd unit removed"
+
+  # ── Kill any leftover socat process ────────────────────────
+  if [[ -f "$PID_FILE" ]]; then
+    PID=$(cat "$PID_FILE")
+    COMM=$(ps -p "$PID" -o comm= 2>/dev/null | tr -d '[:space:]')
+    if [[ "$COMM" == "socat" ]]; then
+      kill "$PID" 2>/dev/null && ok_msg "socat process killed (PID $PID)"
+    fi
+    rm -f "$PID_FILE"
+  fi
+
+  # ── Remove nginx config ─────────────────────────────────────
+  section "Removing nginx config"
+  rm -f "$NGINX_LINK"    && ok_msg "Removed sites-enabled symlink"
+  rm -f "$NGINX_CONF"    && ok_msg "Removed sites-available config"
+  rm -f "$HTPASSWD_FILE" && ok_msg "Removed htpasswd file"
+
+  if [[ -z "$(ls /etc/nginx/sites-enabled/ 2>/dev/null)" ]]; then
+    ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null
+    warn_msg "No other nginx sites active — restored default site"
+  fi
+
+  if nginx -t 2>/dev/null; then
+    systemctl reload nginx 2>/dev/null && ok_msg "nginx reloaded"
+  else
+    warn_msg "nginx config has errors after removal — check manually"
+  fi
+
+  # ── Remove panel TLS cert ───────────────────────────────────
+  section "Removing panel TLS certificate"
+  rm -rf "$CERT_DIR" && ok_msg "Removed $CERT_DIR"
+
+  # ── Remove panel token, role, logs ─────────────────────────
+  section "Removing panel data"
+  rm -f "$TOKEN_FILE" && ok_msg "Removed panel token"
+  rm -f "$ROLE_FILE"  && ok_msg "Removed role file"
+  rm -f "$LOG_FILE" "${LOG_FILE}.1" 2>/dev/null && ok_msg "Removed log files"
+
+  # ── Remove panel files ──────────────────────────────────────
+  section "Removing panel files"
+  rm -rf "$INSTALL_DIR" && ok_msg "Removed $INSTALL_DIR"
+
+  # ── Close firewall ports ────────────────────────────────────
+  section "Firewall"
+  if command -v ufw &>/dev/null; then
+    ufw delete allow 8443/tcp 2>/dev/null && ok_msg "ufw: removed port 8443"
+    ufw delete allow 80/tcp   2>/dev/null && ok_msg "ufw: removed port 80"
+  else
+    warn_msg "ufw not found — remove ports 8443 and 80 manually if needed"
+  fi
+
+  echo ""
+  echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${GRN}  ✓ Panel uninstalled completely.${NC}"
+  echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo -e "  ${YLW}Note:${NC} DaggerConnect itself and its config files were not touched."
+  echo -e "        To reinstall the panel: sudo bash daggerconnect-panel.sh"
+  echo ""
+  exit 0
+fi
+
+# ============================================================
+# CHANGE PASSWORD (subcommand)
+# ============================================================
+if [[ "$1" == "change-password" ]]; then
+  section "Change panel password"
+  if ! command -v htpasswd &>/dev/null; then
+    die "htpasswd not found — install apache2-utils"
+  fi
+  if [[ ! -f "$HTPASSWD_FILE" ]]; then
+    die "htpasswd file not found at $HTPASSWD_FILE — run setup first"
+  fi
+  echo -e "${YLW}Username to update (leave blank to list existing):${NC}"
+  read -rp "  Username: " CHPW_USER
+  if [[ -z "$CHPW_USER" ]]; then
+    echo "Existing users:"
+    cut -d: -f1 "$HTPASSWD_FILE"
+    exit 0
+  fi
+  while true; do
+    echo -e "${YLW}New password (hidden):${NC}"
+    read -rsp "  Password: " P1; echo ""
+    read -rsp "  Confirm:  " P2; echo ""
+    if [[ "$P1" != "$P2" ]]; then
+      warn_msg "Passwords do not match — try again"
+    elif [[ ${#P1} -lt 8 ]]; then
+      warn_msg "Password must be at least 8 characters — try again"
+    else
+      break
+    fi
+  done
+  htpasswd -b "$HTPASSWD_FILE" "$CHPW_USER" "$P1" 2>/dev/null \
+    && ok_msg "Password updated for '$CHPW_USER'" \
+    || die "htpasswd update failed"
+  systemctl reload nginx 2>/dev/null && ok_msg "nginx reloaded"
+  exit 0
+fi
+
+# ============================================================
+# INSTALL / UPDATE
+# ============================================================
 
 # ── Detect: fresh install or update ──────────────────────────
-# All four conditions must be true to be considered a complete, working install:
-#   1. Panel files are present
-#   2. systemd service is enabled and active
-#   3. nginx config exists (nginx setup completed)
-#   4. htpasswd file exists (auth setup completed)
 IS_UPDATE=false
 if [[ -f "$INSTALL_DIR/start.sh" ]] && \
    systemctl is-enabled --quiet daggerconnect-panel 2>/dev/null && \
@@ -49,11 +176,115 @@ if [[ -f "$INSTALL_DIR/start.sh" ]] && \
 fi
 
 if $IS_UPDATE; then
-  echo -e "  Control Panel ${YLW}Updater${NC} v1.0.0"
+  echo -e "  Control Panel — ${YLW}Already Installed${NC}"
+  echo ""
+  echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "  The DaggerConnect Control Panel is already installed."
+  echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo -e "  What would you like to do?"
+  echo ""
+  echo -e "  ${GRN}[1]${NC} Update   — pull latest panel files and restart service"
+  echo -e "  ${RED}[2]${NC} Uninstall — remove panel, nginx config, TLS cert & token"
+  echo -e "  ${YLW}[3]${NC} Cancel"
+  echo ""
+  while true; do
+    read -rp "  Your choice [1/2/3]: " MENU_CHOICE
+    case "$MENU_CHOICE" in
+      1)
+        echo ""
+        echo -e "  Control Panel ${YLW}Updater${NC} v1.0.0"
+        echo ""
+        break
+        ;;
+      2)
+        echo ""
+        # ── Inline uninstall ──────────────────────────────────
+        echo -e "  Control Panel ${RED}Uninstaller${NC} v1.0.0"
+        echo ""
+        echo -e "${YLW}This will remove the control panel, nginx config, TLS cert, and auth token."
+        echo -e "Your DaggerConnect config files will NOT be touched.${NC}"
+        echo ""
+        read -rp "  Are you sure? [y/N]: " CONFIRM
+        [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+
+        section "Stopping service"
+        if systemctl is-active --quiet daggerconnect-panel 2>/dev/null; then
+          systemctl stop daggerconnect-panel && ok_msg "Service stopped"
+        else
+          warn_msg "Service was not running"
+        fi
+        systemctl disable daggerconnect-panel 2>/dev/null && ok_msg "Service disabled"
+        rm -f /etc/systemd/system/daggerconnect-panel.service
+        systemctl daemon-reload
+        ok_msg "systemd unit removed"
+
+        if [[ -f "$PID_FILE" ]]; then
+          PID=$(cat "$PID_FILE")
+          COMM=$(ps -p "$PID" -o comm= 2>/dev/null | tr -d '[:space:]')
+          if [[ "$COMM" == "socat" ]]; then
+            kill "$PID" 2>/dev/null && ok_msg "socat process killed (PID $PID)"
+          fi
+          rm -f "$PID_FILE"
+        fi
+
+        section "Removing nginx config"
+        rm -f "$NGINX_LINK"    && ok_msg "Removed sites-enabled symlink"
+        rm -f "$NGINX_CONF"    && ok_msg "Removed sites-available config"
+        rm -f "$HTPASSWD_FILE" && ok_msg "Removed htpasswd file"
+
+        if [[ -z "$(ls /etc/nginx/sites-enabled/ 2>/dev/null)" ]]; then
+          ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null
+          warn_msg "No other nginx sites active — restored default site"
+        fi
+        if nginx -t 2>/dev/null; then
+          systemctl reload nginx 2>/dev/null && ok_msg "nginx reloaded"
+        else
+          warn_msg "nginx config has errors after removal — check manually"
+        fi
+
+        section "Removing panel TLS certificate"
+        rm -rf "$CERT_DIR" && ok_msg "Removed $CERT_DIR"
+
+        section "Removing panel data"
+        rm -f "$TOKEN_FILE" && ok_msg "Removed panel token"
+        rm -f "$ROLE_FILE"  && ok_msg "Removed role file"
+        rm -f "$LOG_FILE" "${LOG_FILE}.1" 2>/dev/null && ok_msg "Removed log files"
+
+        section "Removing panel files"
+        rm -rf "$INSTALL_DIR" && ok_msg "Removed $INSTALL_DIR"
+
+        section "Firewall"
+        if command -v ufw &>/dev/null; then
+          ufw delete allow 8443/tcp 2>/dev/null && ok_msg "ufw: removed port 8443"
+          ufw delete allow 80/tcp   2>/dev/null && ok_msg "ufw: removed port 80"
+        else
+          warn_msg "ufw not found — remove ports 8443 and 80 manually if needed"
+        fi
+
+        echo ""
+        echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GRN}  ✓ Panel uninstalled completely.${NC}"
+        echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "  ${YLW}Note:${NC} DaggerConnect itself and its config files were not touched."
+        echo -e "        To reinstall the panel: sudo bash $0"
+        echo ""
+        exit 0
+        ;;
+      3|"")
+        echo "Aborted."
+        exit 0
+        ;;
+      *)
+        warn_msg "Invalid choice — enter 1, 2, or 3"
+        ;;
+    esac
+  done
 else
   echo -e "  Control Panel ${GRN}Installer${NC} v1.0.0"
+  echo ""
 fi
-echo ""
 
 # ── Check DaggerConnect config exists ────────────────────────
 section "Checking DaggerConnect"
@@ -66,7 +297,6 @@ else
 fi
 
 # ── Panel port selection ──────────────────────────────────────
-# On update: read existing port from nginx config if available, else keep default
 DEFAULT_PANEL_PORT=8443
 if $IS_UPDATE && [[ -f "$NGINX_CONF" ]]; then
   EXISTING_PORT=$(grep -oP 'listen \K[0-9]+(?= ssl)' "$NGINX_CONF" 2>/dev/null | head -1)
@@ -123,7 +353,7 @@ for FILE in "${FILES[@]}"; do
 done
 chmod +x "$INSTALL_DIR"/*.sh
 
-# ── Service: restart on update, full setup on fresh install ───
+# ── Service: restart on update, full setup on fresh install ──
 if $IS_UPDATE; then
   section "Restarting service"
   systemctl restart daggerconnect-panel 2>/dev/null \
@@ -153,7 +383,7 @@ EOF
     && ok_msg "Service enabled and started" \
     || die "Service failed to start — check: journalctl -u daggerconnect-panel"
 
-  # ── nginx setup (inline, formerly setup-nginx.sh) ────────────
+  # ── nginx setup ─────────────────────────────────────────────
   section "Setting up nginx"
 
   # ── Panel TLS cert ──────────────────────────────────────────
@@ -225,7 +455,7 @@ EOF
 
   cat > "$NGINX_CONF" <<NGINX
 # DaggerConnect Panel — nginx reverse proxy
-# Auto-generated by install.sh
+# Auto-generated by daggerconnect-panel.sh
 
 limit_req_zone \$binary_remote_addr zone=panel:10m rate=10r/s;
 
@@ -340,41 +570,6 @@ NGINX
   fi
 fi
 
-# ── Change-password subcommand ────────────────────────────────
-if [[ "$1" == "change-password" ]]; then
-  section "Change panel password"
-  if ! command -v htpasswd &>/dev/null; then
-    die "htpasswd not found — install apache2-utils"
-  fi
-  if [[ ! -f "$HTPASSWD_FILE" ]]; then
-    die "htpasswd file not found at $HTPASSWD_FILE — run setup first"
-  fi
-  echo -e "${YLW}Username to update (leave blank to list existing):${NC}"
-  read -rp "  Username: " CHPW_USER
-  if [[ -z "$CHPW_USER" ]]; then
-    echo "Existing users:"
-    cut -d: -f1 "$HTPASSWD_FILE"
-    exit 0
-  fi
-  while true; do
-    echo -e "${YLW}New password (hidden):${NC}"
-    read -rsp "  Password: " P1; echo ""
-    read -rsp "  Confirm:  " P2; echo ""
-    if [[ "$P1" != "$P2" ]]; then
-      warn_msg "Passwords do not match — try again"
-    elif [[ ${#P1} -lt 8 ]]; then
-      warn_msg "Password must be at least 8 characters — try again"
-    else
-      break
-    fi
-  done
-  htpasswd -b "$HTPASSWD_FILE" "$CHPW_USER" "$P1" 2>/dev/null \
-    && ok_msg "Password updated for '$CHPW_USER'" \
-    || die "htpasswd update failed"
-  systemctl reload nginx 2>/dev/null && ok_msg "nginx reloaded"
-  exit 0
-fi
-
 # ── Done ──────────────────────────────────────────────────────
 SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null \
   || ip route get 8.8.8.8 2>/dev/null | awk '/src/{print $7; exit}')
@@ -399,5 +594,6 @@ echo ""
 echo -e "  ${YLW}Useful commands:${NC}"
 echo "    sudo ${INSTALL_DIR}/start.sh token"
 echo "    sudo $0 change-password"
+echo "    sudo $0 uninstall"
 echo ""
 echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
