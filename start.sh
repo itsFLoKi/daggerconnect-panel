@@ -128,17 +128,9 @@ fi
 
 # ── Subcommand: role ─────────────────────────────────────────
 if [[ "$1" == "role" ]]; then
-  if [[ "$2" == "server" || "$2" == "client" ]]; then
-    mkdir -p /etc/DaggerConnect
-    printf '%s\n' "$2" > "$ROLE_FILE"
-    chmod 644 "$ROLE_FILE"
-    echo "Node role set to: $2"
-    echo "Restart the panel for the change to take effect."
-  else
-    CURRENT=$(cat "$ROLE_FILE" 2>/dev/null | tr -d '[:space:]' || echo "not set")
-    echo "Current role: $CURRENT"
-    echo "Usage: sudo $0 role [server|client]"
-  fi
+  CURRENT=$(cat "$ROLE_FILE" 2>/dev/null | tr -d '[:space:]' || echo "not set")
+  echo "Current role: $CURRENT"
+  echo "Role is detected automatically from /etc/DaggerConnect/server.yaml or client.yaml"
   exit 0
 fi
 
@@ -184,25 +176,20 @@ else
   ok_msg "Loaded existing token from $TOKEN_FILE"
 fi
 
-# ── Detect or prompt for node role ───────────────────────────
-NODE_ROLE=$(cat "$ROLE_FILE" 2>/dev/null | tr -d '[:space:]')
-if [[ "$NODE_ROLE" != "server" && "$NODE_ROLE" != "client" ]]; then
-  echo ""
-  echo -e "  ${YLW}Is this the SERVER (Iran/relay) VPS or the CLIENT (foreign/exit) VPS?${NC}"
-  select ROLE_CHOICE in "server — Iran/relay VPS (receives tunnel)" "client — Foreign/exit VPS (connects out)"; do
-    case "$ROLE_CHOICE" in
-      server*) NODE_ROLE="server"; break ;;
-      client*) NODE_ROLE="client"; break ;;
-    esac
-  done
-  # Guard against Ctrl+C or empty selection
-  if [[ -z "$NODE_ROLE" ]]; then
-    die "Role not selected — exiting. Run again and choose server or client."
-  fi
-  printf '%s\n' "$NODE_ROLE" > "$ROLE_FILE"
-  chmod 644 "$ROLE_FILE"
-  ok_msg "Role saved: $NODE_ROLE"
+# ── Detect node role from YAML files ─────────────────────────
+NODE_ROLE=""
+if [[ -f "/etc/DaggerConnect/server.yaml" ]]; then
+  NODE_ROLE="server"
+elif [[ -f "/etc/DaggerConnect/client.yaml" ]]; then
+  NODE_ROLE="client"
 fi
+
+if [[ -z "$NODE_ROLE" ]]; then
+  die "Could not detect role — neither /etc/DaggerConnect/server.yaml nor client.yaml found.\nInstall DaggerConnect and create your config file first."
+fi
+
+printf '%s\n' "$NODE_ROLE" > "$ROLE_FILE"
+chmod 644 "$ROLE_FILE"
 
 echo ""
 echo -e "  ${CYN}Node role:${NC} ${YLW}${NODE_ROLE^^}${NC}"
@@ -251,7 +238,6 @@ echo "  Logs:   tail -f $LOG_FILE   (or: sudo $0 logs)"
 echo "  Status: sudo $0 status"
 echo "  Stop:   sudo $0 stop"
 echo "  Token:  sudo $0 token"
-echo "  Role:   sudo $0 role [server|client]"
 echo ""
 
 # ── Systemd hint (no unit file provided yet) ─────────────────
