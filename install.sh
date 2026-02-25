@@ -3,12 +3,12 @@
 # DaggerConnect Control Panel — Installer
 # Clones the repo, installs dependencies, starts the panel,
 # and sets up nginx.
-# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
+# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USER/daggerconnect-panel/main/install.sh)
 # ============================================================
 
 INSTALL_DIR="/opt/daggerconnect-panel"
-REPO_URL="https://github.com/itsFLoKi/daggerconnect-panel"
-PANEL_BRANCH="main"
+RAW_BASE="https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main"
+FILES=(panel.html api.sh start.sh setup-nginx.sh)
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'; CYN='\033[0;36m'; NC='\033[0m'
 
@@ -43,23 +43,18 @@ fi
 # ── Install dependencies ──────────────────────────────────────
 section "Installing dependencies"
 apt-get update -qq || warn_msg "apt update failed — continuing anyway"
-apt-get install -y socat nginx apache2-utils python3 python3-yaml openssl git \
+apt-get install -y socat nginx apache2-utils python3 python3-yaml openssl \
   || die "Failed to install dependencies"
 ok_msg "Dependencies installed"
 
-# ── Clone or update repo ──────────────────────────────────────
+# ── Download panel files ──────────────────────────────────────
 section "Installing panel files"
-if [[ -d "$INSTALL_DIR/.git" ]]; then
-  echo "Existing installation found — pulling latest..."
-  git -C "$INSTALL_DIR" pull --ff-only \
-    && ok_msg "Updated to latest" \
-    || warn_msg "git pull failed — continuing with existing files"
-else
-  git clone --depth 1 --branch "$PANEL_BRANCH" "$REPO_URL" "$INSTALL_DIR" \
-    || die "git clone failed — check the repo URL in this script"
-  ok_msg "Cloned to $INSTALL_DIR"
-fi
-
+mkdir -p "$INSTALL_DIR"
+for FILE in "${FILES[@]}"; do
+  curl -fsSL "${RAW_BASE}/${FILE}" -o "${INSTALL_DIR}/${FILE}" \
+    && ok_msg "${FILE}" \
+    || die "Failed to download ${FILE} — check your internet connection"
+done
 chmod +x "$INSTALL_DIR"/*.sh
 
 # ── Start socat backend ───────────────────────────────────────

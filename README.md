@@ -115,11 +115,15 @@ This will: install dependencies, clone the repo to `/opt/daggerconnect-panel`, s
 
 ### Manual setup
 
-#### 1. Clone the repo
+#### 1. Download the files
 
 ```bash
-git clone https://github.com/itsFLoKi/daggerconnect-panel /opt/daggerconnect-panel
-chmod +x /opt/daggerconnect-panel/*.sh
+mkdir -p /opt/daggerconnect-panel
+cd /opt/daggerconnect-panel
+for FILE in panel.html api.sh start.sh setup-nginx.sh; do
+  curl -fsSL "https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/${FILE}" -o "${FILE}"
+done
+chmod +x *.sh
 ```
 
 #### 2. Install dependencies
