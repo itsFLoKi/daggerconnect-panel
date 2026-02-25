@@ -6,7 +6,13 @@
 
 INSTALL_DIR="/opt/daggerconnect-panel"
 RAW_BASE="https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main"
-FILES=(panel.html api.sh start.sh setup-nginx.sh)
+FILES=(panel.html api.sh start.sh)
+
+SOCAT_PORT=7070
+HTPASSWD_FILE="/etc/nginx/.dagger-htpasswd"
+CERT_DIR="/etc/DaggerConnect/panel-tls"
+NGINX_CONF="/etc/nginx/sites-available/daggerconnect-panel"
+NGINX_LINK="/etc/nginx/sites-enabled/daggerconnect-panel"
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'; CYN='\033[0;36m'; NC='\033[0m'
 
@@ -28,9 +34,17 @@ echo -e "${NC}"
 [[ $EUID -ne 0 ]] && die "Must run as root: sudo bash install.sh"
 
 # ── Detect: fresh install or update ──────────────────────────
+# All four conditions must be true to be considered a complete, working install:
+#   1. Panel files are present
+#   2. systemd service is enabled and active
+#   3. nginx config exists (nginx setup completed)
+#   4. htpasswd file exists (auth setup completed)
 IS_UPDATE=false
 if [[ -f "$INSTALL_DIR/start.sh" ]] && \
-   systemctl is-enabled --quiet daggerconnect-panel 2>/dev/null; then
+   systemctl is-enabled --quiet daggerconnect-panel 2>/dev/null && \
+   systemctl is-active  --quiet daggerconnect-panel 2>/dev/null && \
+   [[ -f "$NGINX_CONF" ]] && \
+   [[ -f "$HTPASSWD_FILE" ]]; then
   IS_UPDATE=true
 fi
 
@@ -51,7 +65,34 @@ else
   die "Neither /etc/DaggerConnect/server.yaml nor client.yaml found.\nPlease install and configure DaggerConnect before running this installer."
 fi
 
-# ── Dependencies: full install on fresh, check-only on update ─
+# ── Panel port selection ──────────────────────────────────────
+# On update: read existing port from nginx config if available, else keep default
+DEFAULT_PANEL_PORT=8443
+if $IS_UPDATE && [[ -f "$NGINX_CONF" ]]; then
+  EXISTING_PORT=$(grep -oP 'listen \K[0-9]+(?= ssl)' "$NGINX_CONF" 2>/dev/null | head -1)
+  [[ -n "$EXISTING_PORT" ]] && DEFAULT_PANEL_PORT="$EXISTING_PORT"
+fi
+
+if ! $IS_UPDATE; then
+  section "Panel port"
+  echo -e "${YLW}Choose the HTTPS port for the panel (press Enter for default):${NC}"
+  while true; do
+    read -rp "  Panel port [${DEFAULT_PANEL_PORT}]: " INPUT_PORT
+    INPUT_PORT="${INPUT_PORT:-$DEFAULT_PANEL_PORT}"
+    if [[ "$INPUT_PORT" =~ ^[0-9]+$ ]] && (( INPUT_PORT >= 1 && INPUT_PORT <= 65535 )); then
+      PANEL_PORT="$INPUT_PORT"
+      ok_msg "Panel will be served on port $PANEL_PORT"
+      break
+    else
+      warn_msg "Invalid port '$INPUT_PORT' — enter a number between 1 and 65535"
+    fi
+  done
+else
+  PANEL_PORT="$DEFAULT_PANEL_PORT"
+  ok_msg "Keeping existing panel port: $PANEL_PORT"
+fi
+
+# ── Dependencies ─────────────────────────────────────────────
 if $IS_UPDATE; then
   section "Checking dependencies"
   MISSING=()
@@ -112,9 +153,226 @@ EOF
     && ok_msg "Service enabled and started" \
     || die "Service failed to start — check: journalctl -u daggerconnect-panel"
 
+  # ── nginx setup (inline, formerly setup-nginx.sh) ────────────
   section "Setting up nginx"
-  bash "$INSTALL_DIR/setup-nginx.sh" \
-    || die "setup-nginx.sh failed — check output above"
+
+  # ── Panel TLS cert ──────────────────────────────────────────
+  section "Panel TLS certificate"
+  mkdir -p "$CERT_DIR"; chmod 700 "$CERT_DIR"
+
+  SERVER_IP_RAW=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null \
+    || ip route get 8.8.8.8 2>/dev/null | awk '/src/{print $7; exit}')
+
+  if [[ "$SERVER_IP_RAW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    SERVER_IP="$SERVER_IP_RAW"
+    ok_msg "Detected server IP: $SERVER_IP"
+  else
+    SERVER_IP="localhost"
+    warn_msg "Could not detect public IP (got: '$SERVER_IP_RAW') — using 'localhost' for cert CN"
+  fi
+
+  if [[ -f "$CERT_DIR/panel.crt" && -f "$CERT_DIR/panel.key" ]]; then
+    warn_msg "TLS cert already exists at $CERT_DIR — skipping generation"
+    echo "  To regenerate: rm $CERT_DIR/panel.crt $CERT_DIR/panel.key && sudo $0"
+  else
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout "$CERT_DIR/panel.key" \
+      -out    "$CERT_DIR/panel.crt" \
+      -days   365 \
+      -subj   "/CN=$SERVER_IP/O=DaggerConnect Panel" \
+      2>/dev/null && ok_msg "TLS cert → $CERT_DIR/panel.crt" \
+                 || die "openssl failed"
+    chmod 600 "$CERT_DIR/panel.key"
+  fi
+
+  # ── HTTP Basic Auth ─────────────────────────────────────────
+  section "HTTP Basic Auth"
+  echo ""
+  echo -e "${YLW}Choose a username for the panel web login:${NC}"
+  read -rp "  Username [admin]: " PANEL_USER
+  PANEL_USER="${PANEL_USER:-admin}"
+
+  while true; do
+    echo -e "${YLW}Choose a password (input hidden):${NC}"
+    read -rsp "  Password: " PANEL_PASS; echo ""
+    read -rsp "  Confirm:  " PANEL_PASS2; echo ""
+
+    if [[ "$PANEL_PASS" != "$PANEL_PASS2" ]]; then
+      warn_msg "Passwords do not match — try again"
+    elif [[ ${#PANEL_PASS} -lt 8 ]]; then
+      warn_msg "Password must be at least 8 characters — try again"
+    else
+      break
+    fi
+  done
+
+  if [[ -f "$HTPASSWD_FILE" ]]; then
+    htpasswd -b "$HTPASSWD_FILE" "$PANEL_USER" "$PANEL_PASS" 2>/dev/null \
+      && ok_msg "htpasswd updated for user '$PANEL_USER'" \
+      || die "htpasswd failed"
+  else
+    htpasswd -cb "$HTPASSWD_FILE" "$PANEL_USER" "$PANEL_PASS" 2>/dev/null \
+      && ok_msg "htpasswd created for user '$PANEL_USER'" \
+      || die "htpasswd failed"
+  fi
+  chmod 600 "$HTPASSWD_FILE"
+  chown www-data:www-data "$HTPASSWD_FILE" 2>/dev/null \
+    && ok_msg "htpasswd ownership → www-data" \
+    || warn_msg "chown www-data failed for $HTPASSWD_FILE (nginx may not read it)"
+
+  # ── nginx config ────────────────────────────────────────────
+  section "Writing nginx config"
+
+  cat > "$NGINX_CONF" <<NGINX
+# DaggerConnect Panel — nginx reverse proxy
+# Auto-generated by install.sh
+
+limit_req_zone \$binary_remote_addr zone=panel:10m rate=10r/s;
+
+server {
+    listen ${PANEL_PORT} ssl;
+    server_name _;
+
+    ssl_certificate     ${CERT_DIR}/panel.crt;
+    ssl_certificate_key ${CERT_DIR}/panel.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Content-Security-Policy "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:;";
+
+    limit_req zone=panel burst=20 nodelay;
+    limit_req_status 429;
+
+    auth_basic "DaggerConnect Panel";
+    auth_basic_user_file ${HTPASSWD_FILE};
+
+    root ${INSTALL_DIR};
+    index panel.html;
+
+    location = / {
+        try_files /panel.html =404;
+    }
+
+    location /panel {
+        try_files /panel.html =404;
+    }
+
+    location /api/ {
+        proxy_pass         http://127.0.0.1:${SOCAT_PORT};
+        proxy_http_version 1.0;
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_read_timeout 35s;
+        proxy_connect_timeout 5s;
+        proxy_pass_request_headers on;
+    }
+
+    location / {
+        return 404;
+    }
+
+    access_log /var/log/nginx/dagger-panel-access.log;
+    error_log  /var/log/nginx/dagger-panel-error.log warn;
+}
+
+# Redirect HTTP → HTTPS on port 80
+server {
+    listen 80;
+    server_name _;
+    return 301 https://\$host:${PANEL_PORT}\$request_uri;
+}
+NGINX
+
+  ok_msg "nginx config written to $NGINX_CONF"
+
+  ln -sf "$NGINX_CONF" "$NGINX_LINK"
+  rm -f /etc/nginx/sites-enabled/default 2>/dev/null
+
+  # ── Test nginx config ───────────────────────────────────────
+  section "Testing nginx config"
+  NGINX_TEST=$(nginx -t 2>&1)
+  if echo "$NGINX_TEST" | grep -q "test is successful"; then
+    ok_msg "nginx config valid"
+  else
+    echo "$NGINX_TEST"
+    die "nginx config test failed — see output above"
+  fi
+
+  # ── Start/reload nginx ──────────────────────────────────────
+  section "Starting nginx"
+  systemctl enable nginx 2>/dev/null
+  if systemctl is-active --quiet nginx 2>/dev/null; then
+    systemctl reload nginx && ok_msg "nginx reloaded (graceful)" || die "nginx reload failed"
+  else
+    systemctl start nginx && ok_msg "nginx started" || die "nginx failed to start"
+  fi
+
+  # ── Firewall ────────────────────────────────────────────────
+  section "Firewall"
+  if command -v ufw &>/dev/null; then
+    ufw allow "$PANEL_PORT"/tcp comment "DaggerConnect Panel HTTPS" 2>/dev/null \
+      && ok_msg "ufw: allowed port $PANEL_PORT" \
+      || warn_msg "ufw rule failed — add manually: ufw allow $PANEL_PORT/tcp"
+    ufw allow 80/tcp comment "DaggerConnect Panel HTTP redirect" 2>/dev/null || true
+    ufw status | grep -q "Status: inactive" \
+      && warn_msg "ufw is inactive — ports are open but ufw not enforced"
+  else
+    warn_msg "ufw not found — open ports $PANEL_PORT and 80 in your cloud provider's firewall"
+  fi
+
+  # ── Post-setup healthcheck ──────────────────────────────────
+  section "Healthcheck"
+  sleep 1
+  HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+    --max-time 5 "https://localhost:${PANEL_PORT}/" 2>/dev/null || echo "000")
+  if [[ "$HTTP_CODE" == "401" ]]; then
+    ok_msg "Panel responding (401 = auth prompt working ✓)"
+  elif [[ "$HTTP_CODE" == "200" ]]; then
+    ok_msg "Panel responding (200 — auth may not be enforced, check htpasswd)"
+  else
+    warn_msg "Panel not responding on :$PANEL_PORT (got HTTP $HTTP_CODE) — check: nginx -t && systemctl status nginx"
+  fi
+fi
+
+# ── Change-password subcommand ────────────────────────────────
+if [[ "$1" == "change-password" ]]; then
+  section "Change panel password"
+  if ! command -v htpasswd &>/dev/null; then
+    die "htpasswd not found — install apache2-utils"
+  fi
+  if [[ ! -f "$HTPASSWD_FILE" ]]; then
+    die "htpasswd file not found at $HTPASSWD_FILE — run setup first"
+  fi
+  echo -e "${YLW}Username to update (leave blank to list existing):${NC}"
+  read -rp "  Username: " CHPW_USER
+  if [[ -z "$CHPW_USER" ]]; then
+    echo "Existing users:"
+    cut -d: -f1 "$HTPASSWD_FILE"
+    exit 0
+  fi
+  while true; do
+    echo -e "${YLW}New password (hidden):${NC}"
+    read -rsp "  Password: " P1; echo ""
+    read -rsp "  Confirm:  " P2; echo ""
+    if [[ "$P1" != "$P2" ]]; then
+      warn_msg "Passwords do not match — try again"
+    elif [[ ${#P1} -lt 8 ]]; then
+      warn_msg "Password must be at least 8 characters — try again"
+    else
+      break
+    fi
+  done
+  htpasswd -b "$HTPASSWD_FILE" "$CHPW_USER" "$P1" 2>/dev/null \
+    && ok_msg "Password updated for '$CHPW_USER'" \
+    || die "htpasswd update failed"
+  systemctl reload nginx 2>/dev/null && ok_msg "nginx reloaded"
+  exit 0
 fi
 
 # ── Done ──────────────────────────────────────────────────────
@@ -129,8 +387,9 @@ $IS_UPDATE \
   || echo -e "${GRN}  ✓ Installation complete!${NC}"
 echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  ${YLW}Panel URL:${NC}  https://${SERVER_IP}:8443"
+echo -e "  ${YLW}Panel URL:${NC}  https://${SERVER_IP}:${PANEL_PORT}"
 if ! $IS_UPDATE; then
+  echo -e "  ${YLW}User:${NC}       $PANEL_USER"
   echo -e "  ${YLW}Token:${NC}      $(cat /etc/DaggerConnect/panel.token 2>/dev/null | tr -d '[:space:]' || echo "run: sudo ${INSTALL_DIR}/start.sh token")"
   echo ""
   echo -e "  ${YLW}Note:${NC} Your browser will warn about the self-signed cert."
@@ -141,5 +400,6 @@ echo -e "  ${YLW}Useful commands:${NC}"
 echo "    sudo ${INSTALL_DIR}/start.sh status"
 echo "    sudo ${INSTALL_DIR}/start.sh token"
 echo "    sudo ${INSTALL_DIR}/start.sh logs"
+echo "    sudo $0 change-password"
 echo ""
 echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
