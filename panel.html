@@ -1131,7 +1131,7 @@
           <div class="form-row2">
             <div class="form-group">
               <label>Fake Domain (Host / SNI)</label>
-              <select id="mimic-domain" onchange="document.getElementById('mimic-custom-row').style.display=this.value==='custom'?'':'none'">
+              <select id="tp-mimic-domain" onchange="document.getElementById('tp-mimic-custom-row').style.display=this.value==='custom'?'':'none'">
                 <option value="www.google.com">www.google.com</option>
                 <option value="www.cloudflare.com">www.cloudflare.com</option>
                 <option value="api.github.com">api.github.com</option>
@@ -1143,17 +1143,17 @@
             </div>
             <div class="form-group">
               <label>Fake Path</label>
-              <input type="text" id="mimic-path" value="/search" placeholder="/search">
+              <input type="text" id="tp-mimic-path" value="/search" placeholder="/search">
             </div>
           </div>
-          <div id="mimic-custom-row" class="form-group" style="display:none">
+          <div id="tp-mimic-custom-row" class="form-group" style="display:none">
             <label>Custom Domain</label>
-            <input type="text" id="mimic-custom-domain" placeholder="cdn.example.com">
+            <input type="text" id="tp-mimic-custom-domain" placeholder="cdn.example.com">
           </div>
           <div class="form-group">
             <label style="display:flex;align-items:center;gap:8px">
               Session Cookie
-              <div class="toggle on" id="mimic-cookies" onclick="this.classList.toggle('on')" style="transform:scale(0.8)"></div>
+              <div class="toggle on" id="tp-mimic-cookies" onclick="this.classList.toggle('on')" style="transform:scale(0.8)"></div>
               <span class="text-muted text-xs">(recommended — mimics real browser sessions)</span>
             </label>
           </div>
@@ -1542,7 +1542,7 @@
       <div class="section-head">
         <h2>YAML Editor</h2>
         <div class="section-div"></div>
-        <select id="yaml-target" style="width:160px" onchange="loadConfig(this.value)">
+        <select id="yaml-target" style="width:160px">
           <option value="server">Server Config</option>
           <option value="client">Client Config</option>
         </select>
@@ -2434,15 +2434,21 @@
     }
   }
 
+  // Helper: switch to yaml tab and set content without triggering loadConfig
+  function setYamlPreview(target, yaml, label) {
+    document.getElementById('yaml-target').value = target;
+    switchTab('yaml', true);
+    document.getElementById('yaml-editor').value = yaml;
+    if (label) document.getElementById('yaml-file-label').textContent = label;
+  }
+
   async function loadTemplate(transport) {
     try {
       const d = await api(`/api/config/template?transport=${transport}&role=${NODE_ROLE}`);
       if (d.ok) {
         const content = d.template.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-        document.getElementById('yaml-target').value = NODE_ROLE === 'client' ? 'client' : 'server';
-        switchTab('yaml', true);
-        document.getElementById('yaml-editor').value = content;
-        document.getElementById('yaml-file-label').textContent = `Template: ${transport} (${d.role}) — edit PSK before saving!`;
+        const tplTarget = NODE_ROLE === 'client' ? 'client' : 'server';
+        setYamlPreview(tplTarget, content, `Template: ${transport} (${d.role}) — edit PSK before saving!`);
         showNotif(`Template loaded for ${transport} (${d.role}) — edit PSK!`, '📄');
       }
     } catch(e) {
@@ -2807,11 +2813,40 @@
 
     let yaml = `mode: "server"\npsk: "${psk}"\nprofile: "${profile}"\nverbose: ${verbose}\n`;
     if (hasCert)  yaml += `\ncert_file: "/etc/DaggerConnect/certs/cert.pem"\nkey_file: "/etc/DaggerConnect/certs/key.pem"\n`;
-    if (hasMimic) yaml += `\nhttp_mimic:\n  fake_domain: "${mimicDom}"\n  fake_path: "${mimicPath}"\n  session_cookie: ${mimicCook}\n`;
+    yaml += `\nhttp_mimic:\n  fake_domain: "${mimicDom}"\n  fake_path: "${mimicPath}"\n  session_cookie: ${mimicCook}\n`;
     yaml += `\nlisteners:\n${listenersYaml}`;
     yaml += `\nsmux:\n  keepalive_interval: ${smuxKa}\n  max_frame_size: ${smuxFrame}\n  max_receive_buffer: ${smuxRecv}\n`;
     yaml += `\ntcp:\n  nodelay: ${nodelay}\n  keepalive: ${tcpKa}\n  max_connections: ${maxConn}\n`;
     yaml += `\nobfuscation:\n  enabled: ${obEn}\n  min_padding: ${obPadMin}\n  max_padding: ${obPadMax}\n  min_delay_ms: ${obDelMin}\n  max_delay_ms: ${obDelMax}\n  burst_chance: ${obBurst}\n`;
+
+    // DaggerMux — always included
+    const dmIface   = document.getElementById('dm-interface')?.value || '';
+    const dmLocalIp = document.getElementById('dm-localip')?.value || '';
+    const dmRoutMac = document.getElementById('dm-routermac')?.value || '';
+    const dmMtu     = document.getElementById('fec-mtu')?.value || '1350';
+    const dmSnd     = document.getElementById('dm-sndwnd')?.value || '1024';
+    const dmRcv     = document.getElementById('dm-rcvwnd')?.value || '1024';
+    const dmData    = document.getElementById('fec-data')?.value || '10';
+    const dmParity  = document.getElementById('fec-parity')?.value || '1';
+    const dmSockbuf = document.getElementById('dm-sockbuf')?.value || '4194304';
+    const dmLFlags  = (document.getElementById('dm-local-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
+    const dmRFlags  = (document.getElementById('dm-remote-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
+    yaml += `\ndaggermux:\n  interface: "${dmIface}"\n  local_ip: "${dmLocalIp}"\n  router_mac: "${dmRoutMac}"\n  mtu: ${dmMtu}\n  snd_wnd: ${dmSnd}\n  rcv_wnd: ${dmRcv}\n  data_shard: ${dmData}\n  parity_shard: ${dmParity}\n  sock_buf: ${dmSockbuf}\n  local_flags:\n${dmLFlags}\n  remote_flags:\n${dmRFlags}\n`;
+
+    // KCP — always included
+    const kcpMtu = document.getElementById('kcp-mtu')?.value || '1400';
+    const kcpSnd = document.getElementById('kcp-sndwnd')?.value || '1024';
+    const kcpRcv = document.getElementById('kcp-rcvwnd')?.value || '1024';
+    yaml += `\nkcpmux:\n  nodelay: 1\n  interval: 10\n  resend: 2\n  nc: 1\n  sndwnd: ${kcpSnd}\n  rcvwnd: ${kcpRcv}\n  mtu: ${kcpMtu}\n`;
+
+    // RawMux — always included
+    const rawHt   = document.getElementById('rawmux-handshake')?.value || '10';
+    const rawKa   = document.getElementById('rawmux-keepalive')?.value || '15';
+    const rawRb   = document.getElementById('rawmux-readbuf')?.value || '4194304';
+    const rawWb   = document.getElementById('rawmux-writebuf')?.value || '4194304';
+    const rawPcap = document.getElementById('rawmux-pcap')?.classList.contains('on') ? 'true' : 'false';
+    yaml += `\nrawmux:\n  handshake_timeout: ${rawHt}\n  keepalive: ${rawKa}\n  read_buffer: ${rawRb}\n  write_buffer: ${rawWb}\n  use_pcap: ${rawPcap}\n`;
+
     return yaml;
   }
 
@@ -2819,6 +2854,49 @@
     const psk     = document.getElementById('cli-psk').value || 'CHANGEME';
     const profile = document.getElementById('cli-profile').value || 'balanced';
     const verbose = document.getElementById('cli-verbose').classList.contains('on');
+
+    // Read smux/tcp from server config UI (shared settings — same fields)
+    const nodelay   = document.getElementById('tcp-nodelay')?.classList.contains('on') ?? true;
+    const tcpKa     = document.getElementById('tcp-ka')?.value || '15';
+    const maxConn   = document.getElementById('max-conn')?.value || '5000';
+    const smuxKa    = document.getElementById('smux-ka')?.value || '5';
+    const smuxFrame = document.getElementById('smux-frame')?.value || '32768';
+    const smuxRecv  = document.getElementById('smux-recv')?.value || '16777216';
+    const mimicDom  = document.getElementById('mimic-domain')?.value || 'www.google.com';
+    const mimicPath = document.getElementById('mimic-path')?.value || '/search';
+    const mimicCook = document.getElementById('mimic-cookies')?.classList.contains('on') ?? true;
+    const obEn      = document.getElementById('obfusc-en')?.classList.contains('on') ?? false;
+    const obPadMin  = document.getElementById('ob-padmin')?.value || '16';
+    const obPadMax  = document.getElementById('ob-padmax')?.value || '256';
+    const obDelMin  = document.getElementById('ob-delmin')?.value || '5';
+    const obDelMax  = document.getElementById('ob-delmax')?.value || '50';
+    const obBurst   = (parseFloat(document.getElementById('ob-burst')?.value || '15') / 100).toFixed(2);
+
+    // DaggerMux fields
+    const dmIface   = document.getElementById('dm-interface')?.value || '';
+    const dmLocalIp = document.getElementById('dm-localip')?.value || '';
+    const dmRoutMac = document.getElementById('dm-routermac')?.value || '';
+    const dmMtu     = document.getElementById('fec-mtu')?.value || '1350';
+    const dmSnd     = document.getElementById('dm-sndwnd')?.value || '1024';
+    const dmRcv     = document.getElementById('dm-rcvwnd')?.value || '1024';
+    const dmData    = document.getElementById('fec-data')?.value || '10';
+    const dmParity  = document.getElementById('fec-parity')?.value || '1';
+    const dmSockbuf = document.getElementById('dm-sockbuf')?.value || '4194304';
+    const dmLFlags  = (document.getElementById('dm-local-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
+    const dmRFlags  = (document.getElementById('dm-remote-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
+
+    // KCP fields
+    const kcpMtu    = document.getElementById('kcp-mtu')?.value || '1400';
+    const kcpSnd    = document.getElementById('kcp-sndwnd')?.value || '1024';
+    const kcpRcv    = document.getElementById('kcp-rcvwnd')?.value || '1024';
+
+    // Rawmux fields
+    const rawHt     = document.getElementById('rawmux-handshake')?.value || '10';
+    const rawKa     = document.getElementById('rawmux-keepalive')?.value || '15';
+    const rawRb     = document.getElementById('rawmux-readbuf')?.value || '4194304';
+    const rawWb     = document.getElementById('rawmux-writebuf')?.value || '4194304';
+    const rawPcap   = document.getElementById('rawmux-pcap')?.classList.contains('on') ? 'true' : 'false';
+
     let pathsYaml = '';
     document.querySelectorAll('#client-paths .path-item').forEach(item => {
       const transport = item.querySelectorAll('select')[0]?.value || 'httpsmux';
@@ -2829,20 +2907,25 @@
       const agg       = item.querySelector('.toggle')?.classList.contains('on') ?? true;
       pathsYaml += `  - transport: "${transport}"\n    addr: "${addr}"\n    connection_pool: ${pool}\n    aggressive_pool: ${agg}\n    retry_interval: ${retry}\n    dial_timeout: ${timeout}\n`;
     });
-    if (!pathsYaml) pathsYaml = '  - transport: "httpsmux"\n    addr: "SERVER_IP:443"\n    connection_pool: 3\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: 20\n';
+    if (!pathsYaml) {
+      pathsYaml = '  - transport: "httpsmux"\n    addr: "SERVER_IP:443"\n    connection_pool: 3\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: 20\n';
+    }
+
     let yaml = `mode: "client"\npsk: "${psk}"\nprofile: "${profile}"\nverbose: ${verbose}\n`;
-    yaml += `\nhttp_mimic:\n  fake_domain: "www.google.com"\n  fake_path: "/search"\n  session_cookie: true\n`;
     yaml += `\npaths:\n${pathsYaml}`;
-    yaml += `\nobfuscation:\n  enabled: false\n  min_padding: 16\n  max_padding: 256\n  min_delay_ms: 5\n  max_delay_ms: 50\n  burst_chance: 0.15\n`;
+    yaml += `\nhttp_mimic:\n  fake_domain: "${mimicDom}"\n  fake_path: "${mimicPath}"\n  session_cookie: ${mimicCook}\n`;
+    yaml += `\nsmux:\n  keepalive_interval: ${smuxKa}\n  max_frame_size: ${smuxFrame}\n  max_receive_buffer: ${smuxRecv}\n`;
+    yaml += `\ntcp:\n  nodelay: ${nodelay}\n  keepalive: ${tcpKa}\n  max_connections: ${maxConn}\n`;
+    yaml += `\nobfuscation:\n  enabled: ${obEn}\n  min_padding: ${obPadMin}\n  max_padding: ${obPadMax}\n  min_delay_ms: ${obDelMin}\n  max_delay_ms: ${obDelMax}\n  burst_chance: ${obBurst}\n`;
+    yaml += `\ndaggermux:\n  interface: "${dmIface}"\n  local_ip: "${dmLocalIp}"\n  router_mac: "${dmRoutMac}"\n  mtu: ${dmMtu}\n  snd_wnd: ${dmSnd}\n  rcv_wnd: ${dmRcv}\n  data_shard: ${dmData}\n  parity_shard: ${dmParity}\n  sock_buf: ${dmSockbuf}\n  local_flags:\n${dmLFlags}\n  remote_flags:\n${dmRFlags}\n`;
+    yaml += `\nkcpmux:\n  nodelay: 1\n  interval: 10\n  resend: 2\n  nc: 1\n  sndwnd: ${kcpSnd}\n  rcvwnd: ${kcpRcv}\n  mtu: ${kcpMtu}\n`;
+    yaml += `\nrawmux:\n  handshake_timeout: ${rawHt}\n  keepalive: ${rawKa}\n  read_buffer: ${rawRb}\n  write_buffer: ${rawWb}\n  use_pcap: ${rawPcap}\n`;
     return yaml;
   }
 
   async function saveAndRestart(target) {
     const yaml = target === 'client' ? buildClientYaml() : buildServerYaml();
-    document.getElementById('yaml-target').value = target;
-    switchTab('yaml', true);
-    document.getElementById('yaml-editor').value = yaml;
-    document.getElementById('yaml-file-label').textContent = `Preview — /etc/DaggerConnect/${target}.yaml  (click Apply & Restart to save)`;
+    setYamlPreview(target, yaml, `Preview — /etc/DaggerConnect/${target}.yaml  (click Apply & Restart to save)`);
     showNotif('Review YAML below, then click Apply & Restart', 'ℹ️');
   }
 
@@ -2936,10 +3019,7 @@
       updated = yaml + '\n    maps:\n' + entry + '\n';
     }
 
-    document.getElementById('yaml-target').value = 'server';
-    switchTab('yaml', true);
-    document.getElementById('yaml-editor').value = updated;
-    document.getElementById('yaml-file-label').textContent = 'Preview — will save to /etc/DaggerConnect/server.yaml';
+    setYamlPreview('server', updated, 'Preview — will save to /etc/DaggerConnect/server.yaml');
     showNotif('Mapping added — review and click Apply & Restart', '🔌');
   }
 
@@ -2979,10 +3059,7 @@
       const d2 = await post('/api/config', { target: 'server', content: newYaml });
       if (d2.ok) {
         showNotif('Mapping removed — review in YAML editor', '✅');
-        document.getElementById('yaml-target').value = 'server';
-        switchTab('yaml', true);
-        document.getElementById('yaml-editor').value = newYaml;
-        document.getElementById('yaml-file-label').textContent = 'Preview — /etc/DaggerConnect/server.yaml (click Apply & Restart to save)';
+        setYamlPreview('server', newYaml, 'Preview — /etc/DaggerConnect/server.yaml (click Apply & Restart to save)');
       } else {
         showNotif('Save failed: ' + d2.msg, '❌');
       }
@@ -3007,10 +3084,7 @@
       } else {
         yaml = yaml.trimEnd() + '\n\n' + block + '\n';
       }
-      document.getElementById('yaml-target').value = 'server';
-      switchTab('yaml', true);
-      document.getElementById('yaml-editor').value = yaml;
-      document.getElementById('yaml-file-label').textContent = 'Preview — /etc/DaggerConnect/server.yaml  (click Apply & Restart to save)';
+      setYamlPreview('server', yaml, 'Preview — /etc/DaggerConnect/server.yaml  (click Apply & Restart to save)');
       showNotif('DaggerMux config applied — review and click Apply & Restart', '⚡');
     } catch(e) {
       showNotif('API error: ' + e.message, '❌');
@@ -3342,19 +3416,33 @@
   async function previewTransportYaml() {
     const t = _currentTransport || document.getElementById('transport-selector')?.value || 'httpsmux';
     try {
-      const target = NODE_ROLE === 'client' ? 'client' : 'server';
+      // For client nodes: always target client config. For server nodes: always target server config.
+      // The yaml-target select is authoritative only if both roles exist on this node.
+      const selectEl = document.getElementById('yaml-target');
+      let target;
+      if (NODE_ROLE === 'client') {
+        target = 'client';
+        if (selectEl) selectEl.value = 'client';
+      } else if (NODE_ROLE === 'server') {
+        target = 'server';
+        if (selectEl) selectEl.value = 'server';
+      } else {
+        const selectVal = selectEl?.value;
+        target = (selectVal === 'client' || selectVal === 'server') ? selectVal : 'server';
+      }
+
       const d = await api('/api/config?target=' + target);
       let yaml = d.ok
         ? d.content.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
         : _buildTransportYamlFromScratch(t);
 
+      // Double-check: if loaded yaml says mode: client but target said server, correct it
+      const modeMatch = yaml.match(/^mode:\s*["']?(\w+)/m);
+      const actualTarget = modeMatch ? modeMatch[1] : target;
+
       yaml = _patchTransportInYaml(yaml, t);
 
-      document.getElementById('yaml-target').value = target;
-      switchTab('yaml', true);
-      document.getElementById('yaml-editor').value = yaml;
-      document.getElementById('yaml-file-label').textContent =
-        `Preview — transport: ${t}  (click Apply & Restart to save)`;
+      setYamlPreview(actualTarget, yaml, `Preview — transport: ${t}  (click Apply & Restart to save)`);
       showNotif('Transport settings patched into YAML — review and save', 'ℹ️');
     } catch(e) {
       showNotif('Could not load config: ' + e.message, '❌');
@@ -3362,96 +3450,221 @@
   }
 
   function _buildTransportYamlFromScratch(t) {
-    return `mode: "server"\npsk: "CHANGEME"\nprofile: "balanced"\nverbose: false\n\nlisteners:\n  - addr: "0.0.0.0:443"\n    transport: "${t}"\n    maps:\n      - type: tcp\n        bind: "0.0.0.0:8080"\n        target: "127.0.0.1:8080"\n`;
+    const commonSections = [
+      '',
+      'http_mimic:',
+      '  fake_domain: "www.google.com"',
+      '  fake_path: "/search"',
+      '  session_cookie: true',
+      '',
+      'smux:',
+      '  keepalive_interval: 5',
+      '  max_frame_size: 32768',
+      '  max_receive_buffer: 16777216',
+      '',
+      'tcp:',
+      '  nodelay: true',
+      '  keepalive: 15',
+      '  max_connections: 5000',
+      '',
+      'obfuscation:',
+      '  enabled: false',
+      '  min_padding: 16',
+      '  max_padding: 256',
+      '  min_delay_ms: 5',
+      '  max_delay_ms: 50',
+      '  burst_chance: 0.15',
+      '',
+      'daggermux:',
+      '  interface: ""',
+      '  local_ip: ""',
+      '  router_mac: ""',
+      '  mtu: 1350',
+      '  snd_wnd: 1024',
+      '  rcv_wnd: 1024',
+      '  data_shard: 10',
+      '  parity_shard: 1',
+      '  sock_buf: 4194304',
+      '  local_flags:',
+      '    - "PA"',
+      '    - "A"',
+      '  remote_flags:',
+      '    - "PA"',
+      '    - "A"',
+      '',
+      'kcpmux:',
+      '  nodelay: 1',
+      '  interval: 10',
+      '  resend: 2',
+      '  nc: 1',
+      '  sndwnd: 1024',
+      '  rcvwnd: 1024',
+      '  mtu: 1400',
+      '',
+      'rawmux:',
+      '  handshake_timeout: 10',
+      '  keepalive: 15',
+      '  read_buffer: 4194304',
+      '  write_buffer: 4194304',
+      '  use_pcap: false',
+      ''
+    ].join('\n');
+    if (NODE_ROLE === 'client') {
+      return 'mode: "client"\npsk: "CHANGEME"\nprofile: "balanced"\nverbose: false\n\npaths:\n  - transport: "' + t + '"\n    addr: "SERVER_IP:443"\n    connection_pool: 3\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: 20\n' + commonSections;
+    }
+    return 'mode: "server"\npsk: "CHANGEME"\nprofile: "balanced"\nverbose: false\n\ncert_file: "/etc/DaggerConnect/certs/cert.pem"\nkey_file: "/etc/DaggerConnect/certs/key.pem"\n\nlisteners:\n  - addr: "0.0.0.0:443"\n    transport: "' + t + '"\n    maps:\n      - type: tcp\n        bind: "0.0.0.0:8080"\n        target: "127.0.0.1:8080"\n' + commonSections;
   }
 
   function _patchTransportInYaml(yaml, t) {
     const hasMimic = ['httpsmux','httpmux','wssmux','wsmux'].includes(t);
     const hasTls   = ['httpsmux','wssmux'].includes(t);
+    // Derive from yaml content — most reliable, not affected by NODE_ROLE race condition
+    const modeMatch = yaml.match(/^mode:\s*["']?(\w+)/m);
+    const isClient  = modeMatch ? modeMatch[1] === 'client' : NODE_ROLE === 'client';
 
     // Helper: replace a top-level YAML block (key: ...) safely.
-    // Matches from "^key:" up to (but not including) the next top-level key or end of string.
+    // Always upserts — never removes a block.
     function replaceBlock(src, key, newBlock) {
-      // Build regex: match from ^key: to just before the next ^[a-z] line or end of string
-      const re = new RegExp('(^' + key + ':[ \\t]*\\n(?:(?!^[a-z])[\\s\\S])*)', 'm');
+      const re = new RegExp('(^' + key + ':[ \\t]*\\n(?:(?!^[a-z_])[\\s\\S])*)', 'm');
       if (re.test(src)) {
         return src.replace(re, newBlock);
       }
       return src.trimEnd() + '\n\n' + newBlock;
     }
 
-    // 1. Always patch the transport field in all listeners entries
-    yaml = yaml.replace(/^([ \t]+transport:[ \t]*)["']?\w+["']?/gm,
-      `$1"${t}"`);
+    // Helper: read current value from a YAML block key (returns null if not found)
+    function readBlockVal(src, blockKey, fieldKey) {
+      const blockRe = new RegExp('^' + blockKey + ':[ \\t]*\\n((?:(?!^[a-z_])[\\s\\S])*)', 'm');
+      const bm = src.match(blockRe);
+      if (!bm) return null;
+      const fm = bm[1].match(new RegExp('[ \\t]+' + fieldKey + ':\\s*(.+)'));
+      return fm ? fm[1].trim().replace(/^["']|["']$/g, '') : null;
+    }
 
-    // 2. Patch http_mimic block if mimic transport
-    if (hasMimic) {
-      const domEl    = document.getElementById('mimic-domain');
-      const pathEl   = document.getElementById('mimic-path');
-      const cookEl   = document.getElementById('mimic-cookies');
-      const customEl = document.getElementById('mimic-custom-domain');
-      const domain   = domEl?.value === 'custom' ? (customEl?.value || 'www.google.com') : (domEl?.value || 'www.google.com');
-      const fakePath = pathEl?.value || '/search';
-      const cookie   = cookEl?.classList.contains('on') ? 'true' : 'false';
-      const certFile = document.getElementById('tls-cert-file')?.value || '/etc/DaggerConnect/certs/cert.pem';
-      const keyFile  = document.getElementById('tls-key-file')?.value  || '/etc/DaggerConnect/certs/key.pem';
+    // Helper: read a top-level scalar
+    function readScalar(src, key) {
+      const m = src.match(new RegExp('^' + key + ':\\s*(.+)', 'm'));
+      return m ? m[1].trim().replace(/^["']|["']$/g, '') : null;
+    }
+
+    // ── 1. Patch transport field — in listeners (server) or paths (client) ──
+    // Server format: "    transport: "httpsmux"" (indented key, no dash)
+    // Client format: "  - transport: "httpsmux"" (list item: dash + key on same line)
+    yaml = yaml.replace(/^([ \t]+(?:-[ \t]+)?transport:[ \t]*)["']?\w+["']?/gm, `$1"${t}"`);
+
+    // ── 2. http_mimic block — ALWAYS present regardless of transport ──
+    {
+      const domEl    = document.getElementById('tp-mimic-domain');
+      const pathEl   = document.getElementById('tp-mimic-path');
+      const cookEl   = document.getElementById('tp-mimic-cookies');
+      const customEl = document.getElementById('tp-mimic-custom-domain');
+
+      // If the active transport changed to a mimic type, read from UI; otherwise preserve existing values
+      let domain, fakePath, cookie;
+      if (hasMimic) {
+        domain   = domEl?.value === 'custom' ? (customEl?.value || 'www.google.com') : (domEl?.value || 'www.google.com');
+        fakePath = pathEl?.value || '/search';
+        cookie   = cookEl?.classList.contains('on') ? 'true' : 'false';
+      } else {
+        // Preserve existing values; fall back to defaults
+        domain   = readBlockVal(yaml, 'http_mimic', 'fake_domain')  || (domEl?.value === 'custom' ? (customEl?.value || 'www.google.com') : (domEl?.value || 'www.google.com'));
+        fakePath = readBlockVal(yaml, 'http_mimic', 'fake_path')    || (pathEl?.value || '/search');
+        const existingCookie = readBlockVal(yaml, 'http_mimic', 'session_cookie');
+        cookie   = existingCookie !== null ? existingCookie : (cookEl?.classList.contains('on') ? 'true' : 'false');
+      }
 
       const mimicBlock = `http_mimic:\n  fake_domain: "${domain}"\n  fake_path: "${fakePath}"\n  session_cookie: ${cookie}\n`;
       yaml = replaceBlock(yaml, 'http_mimic', mimicBlock);
+    }
 
-      // Patch cert/key if TLS
-      if (hasTls) {
-        if (/^cert_file:/m.test(yaml)) {
-          yaml = yaml.replace(/^cert_file:\s*.+/m, `cert_file: "${certFile}"`);
-          yaml = yaml.replace(/^key_file:\s*.+/m,  `key_file: "${keyFile}"`);
+    // ── 3. cert_file / key_file — ALWAYS present (relevant for TLS transports) ──
+    {
+      const certFile = document.getElementById('tls-cert-file')?.value
+        || readScalar(yaml, 'cert_file')
+        || '/etc/DaggerConnect/certs/cert.pem';
+      const keyFile  = document.getElementById('tls-key-file')?.value
+        || readScalar(yaml, 'key_file')
+        || '/etc/DaggerConnect/certs/key.pem';
+      if (/^cert_file:/m.test(yaml)) {
+        yaml = yaml.replace(/^cert_file:\s*.+/m, `cert_file: "${certFile}"`);
+        yaml = yaml.replace(/^key_file:\s*.+/m,  `key_file: "${keyFile}"`);
+      } else if (!isClient) {
+        // Insert after http_mimic block on server configs
+        yaml = yaml.trimEnd() + `\ncert_file: "${certFile}"\nkey_file: "${keyFile}"\n`;
+      }
+    }
+
+    // ── 4. daggermux block — ALWAYS present ──
+    {
+      // Use UI values if daggermux is active transport; otherwise preserve existing YAML values
+      const useLive = t === 'daggermux';
+      const mtu     = useLive ? (document.getElementById('fec-mtu')?.value    || readBlockVal(yaml,'daggermux','mtu')    || '1350')  : (readBlockVal(yaml,'daggermux','mtu')    || '1350');
+      const sndwnd  = useLive ? (document.getElementById('dm-sndwnd')?.value  || readBlockVal(yaml,'daggermux','snd_wnd') || '1024') : (readBlockVal(yaml,'daggermux','snd_wnd') || '1024');
+      const rcvwnd  = useLive ? (document.getElementById('dm-rcvwnd')?.value  || readBlockVal(yaml,'daggermux','rcv_wnd') || '1024') : (readBlockVal(yaml,'daggermux','rcv_wnd') || '1024');
+      const data    = useLive ? (document.getElementById('fec-data')?.value   || readBlockVal(yaml,'daggermux','data_shard') || '10')  : (readBlockVal(yaml,'daggermux','data_shard') || '10');
+      const parity  = useLive ? (document.getElementById('fec-parity')?.value || readBlockVal(yaml,'daggermux','parity_shard') || '1') : (readBlockVal(yaml,'daggermux','parity_shard') || '1');
+      const sockbuf = useLive ? (document.getElementById('dm-sockbuf')?.value || readBlockVal(yaml,'daggermux','sock_buf') || '4194304') : (readBlockVal(yaml,'daggermux','sock_buf') || '4194304');
+      const iface   = useLive ? (document.getElementById('dm-interface')?.value || readBlockVal(yaml,'daggermux','interface') || '') : (readBlockVal(yaml,'daggermux','interface') || '');
+      const localIp = useLive ? (document.getElementById('dm-localip')?.value  || readBlockVal(yaml,'daggermux','local_ip') || '') : (readBlockVal(yaml,'daggermux','local_ip') || '');
+      const routMac = useLive ? (document.getElementById('dm-routermac')?.value || readBlockVal(yaml,'daggermux','router_mac') || '') : (readBlockVal(yaml,'daggermux','router_mac') || '');
+
+      // For flags: if useLive, read from UI; otherwise parse existing YAML list or fall back
+      let lFlags, rFlags;
+      if (useLive) {
+        lFlags = (document.getElementById('dm-local-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
+        rFlags = (document.getElementById('dm-remote-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
+      } else {
+        // Preserve existing local_flags / remote_flags list from YAML
+        const blockRe = /^daggermux:[ \t]*\n((?:(?!^[a-z_])[\s\S])*)/m;
+        const bm = yaml.match(blockRe);
+        if (bm) {
+          const lm = bm[1].match(/[ \t]+local_flags:\s*\n((?:[ \t]+-[^\n]*\n?)*)/);
+          const rm = bm[1].match(/[ \t]+remote_flags:\s*\n((?:[ \t]+-[^\n]*\n?)*)/);
+          lFlags = lm ? lm[1].replace(/^/gm, '  ').trimEnd() : '    - "PA"\n    - "A"';
+          rFlags = rm ? rm[1].replace(/^/gm, '  ').trimEnd() : '    - "PA"\n    - "A"';
         } else {
-          yaml = yaml.trimEnd() + `\ncert_file: "${certFile}"\nkey_file: "${keyFile}"\n`;
+          lFlags = '    - "PA"\n    - "A"';
+          rFlags = '    - "PA"\n    - "A"';
         }
       }
-    } else {
-      // Remove http_mimic block if not a mimic transport
-      yaml = yaml.replace(new RegExp('(^http_mimic:[ \\t]*\\n(?:(?!^[a-z])[\\s\\S])*)', 'm'), '');
-    }
-
-    // 3. Patch daggermux block
-    if (t === 'daggermux') {
-      const mtu     = document.getElementById('fec-mtu')?.value    || '1350';
-      const sndwnd  = document.getElementById('dm-sndwnd')?.value  || '1024';
-      const rcvwnd  = document.getElementById('dm-rcvwnd')?.value  || '1024';
-      const data    = document.getElementById('fec-data')?.value   || '10';
-      const parity  = document.getElementById('fec-parity')?.value || '1';
-      const sockbuf = document.getElementById('dm-sockbuf')?.value || '4194304';
-      const iface   = document.getElementById('dm-interface')?.value || '';
-      const localIp = document.getElementById('dm-localip')?.value  || '';
-      const routMac = document.getElementById('dm-routermac')?.value || '';
-      const lFlags  = (document.getElementById('dm-local-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
-      const rFlags  = (document.getElementById('dm-remote-flags')?.value || 'PA,A').split(',').map(f => `    - "${f.trim()}"`).join('\n');
 
       const dmBlock = `daggermux:\n  interface: "${iface}"\n  local_ip: "${localIp}"\n  router_mac: "${routMac}"\n  mtu: ${mtu}\n  snd_wnd: ${sndwnd}\n  rcv_wnd: ${rcvwnd}\n  data_shard: ${data}\n  parity_shard: ${parity}\n  sock_buf: ${sockbuf}\n  local_flags:\n${lFlags}\n  remote_flags:\n${rFlags}\n`;
-      const obfBlock = `obfuscation:\n  enabled: false\n`;
       yaml = replaceBlock(yaml, 'daggermux', dmBlock);
-      yaml = replaceBlock(yaml, 'obfuscation', obfBlock);
     }
 
-    // 4. Patch kcpmux block
-    if (t === 'kcpmux') {
-      const mtu    = document.getElementById('kcp-mtu')?.value    || '1400';
-      const sndwnd = document.getElementById('kcp-sndwnd')?.value || '1024';
-      const rcvwnd = document.getElementById('kcp-rcvwnd')?.value || '1024';
-      const data   = document.getElementById('kcp-data')?.value   || '10';
-      const par    = document.getElementById('kcp-parity')?.value || '1';
-      const sockbuf= document.getElementById('kcp-sockbuf')?.value|| '4194304';
+    // ── 5. obfuscation block — ALWAYS present ──
+    {
+      // Only update from UI if we're on the obfuscation tab or preserve existing
+      const existObf = /^obfuscation:/m.test(yaml);
+      if (!existObf) {
+        yaml = replaceBlock(yaml, 'obfuscation', `obfuscation:\n  enabled: false\n  min_padding: 16\n  max_padding: 256\n  min_delay_ms: 5\n  max_delay_ms: 50\n  burst_chance: 0.15\n`);
+      }
+      // else leave existing obfuscation block untouched
+    }
+
+    // ── 6. kcpmux block — ALWAYS present ──
+    {
+      const useLive = t === 'kcpmux';
+      const mtu    = useLive ? (document.getElementById('kcp-mtu')?.value    || readBlockVal(yaml,'kcpmux','mtu')    || '1400') : (readBlockVal(yaml,'kcpmux','mtu')    || '1400');
+      const sndwnd = useLive ? (document.getElementById('kcp-sndwnd')?.value || readBlockVal(yaml,'kcpmux','sndwnd') || '1024') : (readBlockVal(yaml,'kcpmux','sndwnd') || '1024');
+      const rcvwnd = useLive ? (document.getElementById('kcp-rcvwnd')?.value || readBlockVal(yaml,'kcpmux','rcvwnd') || '1024') : (readBlockVal(yaml,'kcpmux','rcvwnd') || '1024');
       const kcpBlock = `kcpmux:\n  nodelay: 1\n  interval: 10\n  resend: 2\n  nc: 1\n  sndwnd: ${sndwnd}\n  rcvwnd: ${rcvwnd}\n  mtu: ${mtu}\n`;
       yaml = replaceBlock(yaml, 'kcpmux', kcpBlock);
     }
 
-    // 5. Patch rawmux block
-    if (t === 'rawmux') {
-      const ht  = document.getElementById('rawmux-handshake')?.value || '10';
-      const ka  = document.getElementById('rawmux-keepalive')?.value || '15';
-      const rb  = document.getElementById('rawmux-readbuf')?.value   || '4194304';
-      const wb  = document.getElementById('rawmux-writebuf')?.value  || '4194304';
-      const pcap= document.getElementById('rawmux-pcap')?.classList.contains('on') ? 'true' : 'false';
+    // ── 7. rawmux block — ALWAYS present ──
+    {
+      const useLive = t === 'rawmux';
+      const ht   = useLive ? (document.getElementById('rawmux-handshake')?.value || readBlockVal(yaml,'rawmux','handshake_timeout') || '10') : (readBlockVal(yaml,'rawmux','handshake_timeout') || '10');
+      const ka   = useLive ? (document.getElementById('rawmux-keepalive')?.value || readBlockVal(yaml,'rawmux','keepalive') || '15') : (readBlockVal(yaml,'rawmux','keepalive') || '15');
+      const rb   = useLive ? (document.getElementById('rawmux-readbuf')?.value   || readBlockVal(yaml,'rawmux','read_buffer') || '4194304') : (readBlockVal(yaml,'rawmux','read_buffer') || '4194304');
+      const wb   = useLive ? (document.getElementById('rawmux-writebuf')?.value  || readBlockVal(yaml,'rawmux','write_buffer') || '4194304') : (readBlockVal(yaml,'rawmux','write_buffer') || '4194304');
+      let pcap;
+      if (useLive) {
+        pcap = document.getElementById('rawmux-pcap')?.classList.contains('on') ? 'true' : 'false';
+      } else {
+        pcap = readBlockVal(yaml,'rawmux','use_pcap') || 'false';
+      }
       const rawBlock = `rawmux:\n  handshake_timeout: ${ht}\n  keepalive: ${ka}\n  read_buffer: ${rb}\n  write_buffer: ${wb}\n  use_pcap: ${pcap}\n`;
       yaml = replaceBlock(yaml, 'rawmux', rawBlock);
     }
@@ -3462,14 +3675,37 @@
   // ── Auto-detect transport from YAML when tab opens ──
   async function loadTransportFromYaml() {
     try {
-      const target = NODE_ROLE === 'client' ? 'client' : 'server';
+      const selectEl = document.getElementById('yaml-target');
+      let target;
+      if (NODE_ROLE === 'client') {
+        target = 'client';
+        if (selectEl) selectEl.value = 'client';
+      } else if (NODE_ROLE === 'server') {
+        target = 'server';
+        if (selectEl) selectEl.value = 'server';
+      } else {
+        const selectVal = selectEl?.value;
+        target = (selectVal === 'client' || selectVal === 'server') ? selectVal : 'server';
+      }
+
       const d = await api('/api/config?target=' + target);
       if (!d.ok) { selectTransport('httpsmux'); return; }
       const yaml = d.content.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-      // Find the first transport in listeners block
-      const lm = yaml.match(/^listeners:[\s\S]*?transport:\s*["']?(\w+)/m);
-      if (lm) selectTransport(lm[1].replace(/["']/g, ''));
-      else selectTransport('httpsmux');
+
+      // Detect mode from yaml content directly — most reliable
+      const modeMatch = yaml.match(/^mode:\s*["']?(\w+)/m);
+      const isClient = modeMatch ? modeMatch[1] === 'client' : (target === 'client');
+
+      let detected = null;
+      if (isClient) {
+        const pm = yaml.match(/^paths:[\s\S]*?transport:\s*["']?(\w+)/m);
+        if (pm) detected = pm[1].replace(/["']/g, '');
+      } else {
+        const lm = yaml.match(/^listeners:[\s\S]*?transport:\s*["']?(\w+)/m);
+        if (lm) detected = lm[1].replace(/["']/g, '');
+      }
+
+      selectTransport(detected || 'httpsmux');
     } catch(e) { selectTransport('httpsmux'); }
   }
 
@@ -3780,6 +4016,7 @@
     // Tab-specific loads
     if (id === 'ports') loadPortMaps();
     if (id === 'server' && !noLoad) loadListenersFromServerYaml();
+    if (id === 'client' && !noLoad) loadClientConfigFromYaml();
     if (id === 'transport') loadTransportFromYaml();
     if (id === 'connections') {
       loadConnections();
@@ -3891,8 +4128,83 @@
     });
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  CLOCK
+  // ── Parse client.yaml and populate client config form ────────
+  async function loadClientConfigFromYaml() {
+    try {
+      const d = await api('/api/config?target=client');
+      if (!d.ok) return;
+      const yaml = d.content.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      populateClientFromYaml(yaml);
+    } catch(e) { /* silently fall back to empty form */ }
+  }
+
+  function populateClientFromYaml(yaml) {
+    if (!yaml || yaml.startsWith('#')) return;
+
+    const stripQ = s => s ? s.trim().replace(/^["']|["']$/g, '') : '';
+    const globalLine = key => {
+      const m = yaml.match(new RegExp('^' + key + ':\\s*(.+)', 'm'));
+      return m ? stripQ(m[1]) : '';
+    };
+
+    const psk     = globalLine('psk');
+    const profile = globalLine('profile') || 'balanced';
+    const verbose = /^verbose:\s*true/m.test(yaml);
+
+    const pskEl = document.getElementById('cli-psk');
+    if (pskEl && psk) pskEl.value = psk;
+    const proEl = document.getElementById('cli-profile');
+    if (proEl && profile) proEl.value = profile;
+    const verbEl = document.getElementById('cli-verbose');
+    if (verbEl) { if (verbose) verbEl.classList.add('on'); else verbEl.classList.remove('on'); }
+
+    // Parse paths block
+    const pathsMatch = yaml.match(/^paths:\s*\n((?:[ \t]+[^\n]*\n?)*)/m);
+    if (!pathsMatch) return;
+    const pathsBlock = pathsMatch[1];
+    const entries = pathsBlock.split(/(?=^  - )/m).filter(s => s.trim());
+    if (entries.length === 0) return;
+
+    const container = document.getElementById('client-paths');
+    if (!container) return;
+    container.innerHTML = '';
+    pathCount = 0;
+
+    entries.forEach((entry, idx) => {
+      const tM    = entry.match(/transport:\s*(.+)/);
+      const addrM = entry.match(/addr:\s*(.+)/);
+      const poolM = entry.match(/connection_pool:\s*(\d+)/);
+      const retryM= entry.match(/retry_interval:\s*(\d+)/);
+      const toM   = entry.match(/dial_timeout:\s*(\d+)/);
+      const aggM  = entry.match(/aggressive_pool:\s*(\w+)/);
+
+      const transport = tM    ? stripQ(tM[1])    : 'httpsmux';
+      const addr      = addrM ? stripQ(addrM[1]) : '';
+      const pool      = poolM  ? poolM[1]  : '3';
+      const retry     = retryM ? retryM[1] : '5';
+      const timeout   = toM    ? toM[1]    : '20';
+      const agg       = aggM   ? aggM[1] !== 'false' : true;
+
+      pathCount++;
+      const div = document.createElement('div');
+      div.className = 'path-item';
+      div.innerHTML = makePathHTML(pathCount, idx === 0 ? `Primary — ${transport}` : `Path ${pathCount} — ${transport}`, idx === 0 ? 'b-green' : 'b-purple', idx === 0 ? 'Primary' : 'Failover');
+      container.appendChild(div);
+
+      // Populate values after DOM insertion
+      const item = container.lastElementChild;
+      const selEl = item.querySelectorAll('select')[0];
+      const inputs = item.querySelectorAll('input[type=text], input[type=number]');
+      if (selEl) selEl.value = transport;
+      if (inputs[0]) inputs[0].value = addr;   // text: addr
+      if (inputs[1]) inputs[1].value = pool;   // number: pool
+      if (inputs[2]) inputs[2].value = retry;  // number: retry
+      if (inputs[3]) inputs[3].value = timeout;// number: timeout
+      const toggle = item.querySelector('.toggle');
+      if (toggle) { if (agg) toggle.classList.add('on'); else toggle.classList.remove('on'); }
+    });
+  }
+
   // ═══════════════════════════════════════════════════════════
   function updateClock() {
     const el = document.getElementById('clock');
@@ -4728,13 +5040,78 @@
   function wizBuildYaml() {
     const d        = wizData;
     const t        = d.transport || 'httpsmux';
-    const hasMimic = ['httpsmux','httpmux','wssmux','wsmux'].includes(t);
-    const hasCert  = ['httpsmux','wssmux'].includes(t);
     const certFile = d.certFile || '/etc/DaggerConnect/certs/cert.pem';
     const keyFile  = d.keyFile  || '/etc/DaggerConnect/certs/key.pem';
     const domain   = d.fakeDomain    || 'www.google.com';
     const path     = d.fakePath      || '/search';
     const cookie   = d.sessionCookie === false ? 'false' : 'true';
+
+    // daggermux values (always included)
+    const dm = d.dm || {};
+    const lf = (dm.localFlags  || ['PA','A']).map(f => '    - "' + f + '"').join('\n');
+    const rf = (dm.remoteFlags || ['PA','A']).map(f => '    - "' + f + '"').join('\n');
+
+    // kcpmux values (always included)
+    const kcp = d.kcp || {};
+
+    // rawmux — no wizard UI yet, always use defaults
+    const commonSections = [
+      '',
+      'http_mimic:',
+      '  fake_domain: "' + domain + '"',
+      '  fake_path: "' + path + '"',
+      '  session_cookie: ' + cookie,
+      '',
+      'smux:',
+      '  keepalive_interval: 5',
+      '  max_frame_size: 32768',
+      '  max_receive_buffer: 16777216',
+      '',
+      'tcp:',
+      '  nodelay: ' + (d.nodelay ?? true),
+      '  keepalive: ' + (d.tcpka || 15),
+      '  max_connections: ' + (d.maxconn || 5000),
+      '',
+      'obfuscation:',
+      '  enabled: false',
+      '  min_padding: 16',
+      '  max_padding: 256',
+      '  min_delay_ms: 5',
+      '  max_delay_ms: 50',
+      '  burst_chance: 0.15',
+      '',
+      'daggermux:',
+      '  interface: ""',
+      '  local_ip: ""',
+      '  router_mac: ""',
+      '  mtu: ' + (dm.mtu || 1350),
+      '  snd_wnd: ' + (dm.sndWnd || 1024),
+      '  rcv_wnd: ' + (dm.rcvWnd || 1024),
+      '  data_shard: ' + (dm.dataShard || 10),
+      '  parity_shard: ' + (dm.parityShard || 1),
+      '  sock_buf: ' + (dm.sockBuf || 4194304),
+      '  local_flags:',
+      lf,
+      '  remote_flags:',
+      rf,
+      '',
+      'kcpmux:',
+      '  nodelay: 1',
+      '  interval: 10',
+      '  resend: 2',
+      '  nc: 1',
+      '  sndwnd: ' + (kcp.sndWnd || 1024),
+      '  rcvwnd: ' + (kcp.rcvWnd || 1024),
+      '  mtu: ' + (kcp.mtu || 1350),
+      '',
+      'rawmux:',
+      '  handshake_timeout: 10',
+      '  keepalive: 15',
+      '  read_buffer: 4194304',
+      '  write_buffer: 4194304',
+      '  use_pcap: false',
+      ''
+    ].join('\n');
 
     if (d.role === 'server') {
       // Build multi-listener YAML
@@ -4745,59 +5122,31 @@
         tun: null
       }];
 
-      let yaml = `mode: "server"\npsk: "${d.psk}"\nprofile: "${d.profile||'balanced'}"\nverbose: ${d.verbose||false}\n`;
-      if (hasCert)  yaml += `\ncert_file: "${certFile}"\nkey_file: "${keyFile}"\n`;
-      if (hasMimic) yaml += `\nhttp_mimic:\n  fake_domain: "${domain}"\n  fake_path: "${path}"\n  session_cookie: ${cookie}\n`;
-      yaml += `\nlisteners:\n`;
+      let yaml = 'mode: "server"\npsk: "' + d.psk + '"\nprofile: "' + (d.profile||'balanced') + '"\nverbose: ' + (d.verbose||false) + '\n';
+      yaml += '\ncert_file: "' + certFile + '"\nkey_file: "' + keyFile + '"\n';
+      yaml += '\nlisteners:\n';
       listeners.forEach(lst => {
         const lT = lst.transport || t;
-        const lHasCert = ['httpsmux','wssmux'].includes(lT);
-        yaml += `  - addr: "${lst.addr||'0.0.0.0:443'}"\n    transport: "${lT}"\n`;
-        if (lHasCert) yaml += `    cert_file: "${certFile}"\n    key_file: "${keyFile}"\n`;
+        yaml += '  - addr: "' + (lst.addr||'0.0.0.0:443') + '"\n    transport: "' + lT + '"\n';
         const mapsYaml = (lst.ports || []).map(p =>
-          `      - type: ${p.type}\n        bind: "${p.bind}"\n        target: "${p.target}"`
+          '      - type: ' + p.type + '\n        bind: "' + p.bind + '"\n        target: "' + p.target + '"'
         ).join('\n') || '      - type: tcp\n        bind: "0.0.0.0:2222"\n        target: "127.0.0.1:22"';
-        yaml += `    maps:\n${mapsYaml}\n`;
+        yaml += '    maps:\n' + mapsYaml + '\n';
         if (lst.tun && lst.tun.enabled) {
-          yaml += `    tun:\n      name: "${lst.tun.name||'tun0'}"\n      local_ip: "${lst.tun.localIp||'10.0.0.1/30'}"\n      peer_ip: "${lst.tun.peerIp||'10.0.0.2'}"\n      mtu: ${lst.tun.mtu||1420}\n`;
+          yaml += '    tun:\n      name: "' + (lst.tun.name||'tun0') + '"\n      local_ip: "' + (lst.tun.localIp||'10.0.0.1/30') + '"\n      peer_ip: "' + (lst.tun.peerIp||'10.0.0.2') + '"\n      mtu: ' + (lst.tun.mtu||1420) + '\n';
         }
       });
-      yaml += `\nsmux:\n  keepalive_interval: 5\n  max_frame_size: 32768\n  max_receive_buffer: 16777216\n`;
-      yaml += `\ntcp:\n  nodelay: ${d.nodelay??true}\n  keepalive: ${d.tcpka||15}\n  max_connections: ${d.maxconn||5000}\n`;
-      yaml += `\nobfuscation:\n  enabled: false\n  min_padding: 16\n  max_padding: 256\n  min_delay_ms: 5\n  max_delay_ms: 50\n  burst_chance: 0.15\n`;
-      if (t === 'daggermux') {
-        const dm = d.dm || {};
-        const lf = (dm.localFlags  || ['PA','A']).map(f => `    - "${f}"`).join('\n');
-        const rf = (dm.remoteFlags || ['PA','A']).map(f => `    - "${f}"`).join('\n');
-        yaml += `\ndaggermux:\n  mtu: ${dm.mtu||1350}\n  snd_wnd: ${dm.sndWnd||1024}\n  rcv_wnd: ${dm.rcvWnd||1024}\n  data_shard: ${dm.dataShard||10}\n  parity_shard: ${dm.parityShard||1}\n  sock_buf: ${dm.sockBuf||4194304}\n  local_flags:\n${lf}\n  remote_flags:\n${rf}\n`;
-      }
-      if (t === 'kcpmux') {
-        const kcp = d.kcp || {};
-        yaml += `\nkcpmux:\n  mtu: ${kcp.mtu||1350}\n  data_shard: ${kcp.dataShard||10}\n  parity_shard: ${kcp.parityShard||1}\n  sock_buf: ${kcp.sockBuf||4194304}\n`;
-      }
+      yaml += commonSections;
       return yaml;
 
     } else {
       let pathsYaml = (d.paths || []).map(p =>
-        `  - transport: "${p.transport}"\n    addr: "${p.addr}"\n    connection_pool: ${p.pool||3}\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: ${p.timeout||20}`
-      ).join('\n') || `  - transport: "${t}"\n    addr: "SERVER_IP:443"\n    connection_pool: 3\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: 20`;
+        '  - transport: "' + p.transport + '"\n    addr: "' + p.addr + '"\n    connection_pool: ' + (p.pool||3) + '\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: ' + (p.timeout||20)
+      ).join('\n') || '  - transport: "' + t + '"\n    addr: "SERVER_IP:443"\n    connection_pool: 3\n    aggressive_pool: true\n    retry_interval: 5\n    dial_timeout: 20';
 
-      let yaml = `mode: "client"\npsk: "${d.psk}"\nprofile: "${d.profile||'balanced'}"\nverbose: ${d.verbose||false}\n`;
-      if (hasMimic) yaml += `\nhttp_mimic:\n  fake_domain: "${domain}"\n  fake_path: "${path}"\n  session_cookie: ${cookie}\n`;
-      yaml += `\npaths:\n${pathsYaml}\n`;
-      yaml += `\nsmux:\n  keepalive_interval: 5\n  max_frame_size: 32768\n  max_receive_buffer: 16777216\n`;
-      yaml += `\ntcp:\n  nodelay: ${d.nodelay??true}\n  keepalive: ${d.tcpka||15}\n  max_connections: ${d.maxconn||5000}\n`;
-      yaml += `\nobfuscation:\n  enabled: false\n  min_padding: 16\n  max_padding: 256\n  min_delay_ms: 5\n  max_delay_ms: 50\n  burst_chance: 0.15\n`;
-      if (t === 'daggermux') {
-        const dm = d.dm || {};
-        const lf = (dm.localFlags  || ['PA','A']).map(f => `    - "${f}"`).join('\n');
-        const rf = (dm.remoteFlags || ['PA','A']).map(f => `    - "${f}"`).join('\n');
-        yaml += `\ndaggermux:\n  mtu: ${dm.mtu||1350}\n  snd_wnd: ${dm.sndWnd||1024}\n  rcv_wnd: ${dm.rcvWnd||1024}\n  data_shard: ${dm.dataShard||10}\n  parity_shard: ${dm.parityShard||1}\n  sock_buf: ${dm.sockBuf||4194304}\n  local_flags:\n${lf}\n  remote_flags:\n${rf}\n`;
-      }
-      if (t === 'kcpmux') {
-        const kcp = d.kcp || {};
-        yaml += `\nkcpmux:\n  mtu: ${kcp.mtu||1350}\n  data_shard: ${kcp.dataShard||10}\n  parity_shard: ${kcp.parityShard||1}\n  sock_buf: ${kcp.sockBuf||4194304}\n`;
-      }
+      let yaml = 'mode: "client"\npsk: "' + d.psk + '"\nprofile: "' + (d.profile||'balanced') + '"\nverbose: ' + (d.verbose||false) + '\n';
+      yaml += '\npaths:\n' + pathsYaml + '\n';
+      yaml += commonSections;
       return yaml;
     }
   }
@@ -4806,12 +5155,8 @@
     if (!wizCollect()) return;
     const yaml   = wizBuildYaml();
     const target = wizData.role === 'client' ? 'client' : 'server';
-    document.getElementById('yaml-target').value = target;
     closeWizard();
-    switchTab('yaml', true);
-    document.getElementById('yaml-editor').value = yaml;
-    document.getElementById('yaml-file-label').textContent =
-      `Wizard output — /etc/DaggerConnect/${target}.yaml  (click Apply & Restart to save)`;
+    setYamlPreview(target, yaml, `Wizard output — /etc/DaggerConnect/${target}.yaml  (click Apply & Restart to save)`);
     showNotif('Wizard complete! Review YAML then click Apply & Restart', '🧙');
   }
 </script>
