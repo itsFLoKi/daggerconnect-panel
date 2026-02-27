@@ -8,7 +8,8 @@
 # ============================================================
 
 INSTALL_DIR="/opt/daggerconnect-panel"
-RAW_BASE="https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main"
+GITHUB_REPO="itsFLoKi/daggerconnect-panel"
+GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
 FILES=(panel.html api.sh start.sh)
 
 SOCAT_PORT=7070
@@ -43,7 +44,7 @@ echo -e "${NC}"
 # UNINSTALL
 # ============================================================
 if [[ "$1" == "uninstall" ]]; then
-  echo -e "  Control Panel ${RED}Uninstaller${NC} v1.0.0"
+  echo -e "  Control Panel ${RED}Uninstaller${NC} v1.1.0"
   echo ""
   echo -e "${YLW}This will remove the control panel, nginx config, TLS cert, and auth token."
   echo -e "Your DaggerConnect config files will NOT be touched.${NC}"
@@ -193,14 +194,14 @@ if $IS_UPDATE; then
     case "$MENU_CHOICE" in
       1)
         echo ""
-        echo -e "  Control Panel ${YLW}Updater${NC} v1.0.0"
+        echo -e "  Control Panel ${YLW}Updater${NC} v1.1.0"
         echo ""
         break
         ;;
       2)
         echo ""
         # ── Inline uninstall ──────────────────────────────────
-        echo -e "  Control Panel ${RED}Uninstaller${NC} v1.0.0"
+        echo -e "  Control Panel ${RED}Uninstaller${NC} v1.1.0"
         echo ""
         echo -e "${YLW}This will remove the control panel, nginx config, TLS cert, and auth token."
         echo -e "Your DaggerConnect config files will NOT be touched.${NC}"
@@ -282,18 +283,97 @@ if $IS_UPDATE; then
     esac
   done
 else
-  echo -e "  Control Panel ${GRN}Installer${NC} v1.0.0"
+  echo -e "  Control Panel ${GRN}Installer${NC} v1.1.0"
   echo ""
+
+  # ── Pre-install cleanup: remove any leftover partial install ─
+  section "Pre-install cleanup"
+  _panel_cleanup() {
+    # Stop & remove service
+    if systemctl is-active --quiet daggerconnect-panel 2>/dev/null; then
+      systemctl stop daggerconnect-panel 2>/dev/null && ok_msg "Stopped existing service"
+    fi
+    systemctl disable daggerconnect-panel 2>/dev/null
+    rm -f /etc/systemd/system/daggerconnect-panel.service
+    systemctl daemon-reload 2>/dev/null
+
+    # Kill leftover socat
+    if [[ -f "$PID_FILE" ]]; then
+      PID=$(cat "$PID_FILE")
+      COMM=$(ps -p "$PID" -o comm= 2>/dev/null | tr -d '[:space:]')
+      [[ "$COMM" == "socat" ]] && kill "$PID" 2>/dev/null
+      rm -f "$PID_FILE"
+    fi
+
+    # Remove nginx config
+    rm -f "$NGINX_LINK" "$NGINX_CONF" "$HTPASSWD_FILE" 2>/dev/null
+    if [[ -z "$(ls /etc/nginx/sites-enabled/ 2>/dev/null)" ]]; then
+      ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null
+    fi
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null
+
+    # Remove certs, tokens, logs, files
+    rm -rf "$CERT_DIR" 2>/dev/null
+    rm -f "$TOKEN_FILE" "$ROLE_FILE" "$LOG_FILE" "${LOG_FILE}.1" 2>/dev/null
+    rm -rf "$INSTALL_DIR" 2>/dev/null
+
+    # Remove firewall rules silently
+    if command -v ufw &>/dev/null; then
+      ufw delete allow 8443/tcp 2>/dev/null
+      ufw delete allow 80/tcp   2>/dev/null
+    fi
+  }
+
+  # Only run cleanup if there's actually something to clean
+  if [[ -d "$INSTALL_DIR" ]] || \
+     systemctl is-enabled --quiet daggerconnect-panel 2>/dev/null || \
+     [[ -f "$NGINX_CONF" ]] || \
+     [[ -f "$HTPASSWD_FILE" ]]; then
+    warn_msg "Existing panel files detected — cleaning up before fresh install..."
+    _panel_cleanup
+    ok_msg "Cleanup complete"
+  else
+    ok_msg "No previous installation found — clean slate"
+  fi
 fi
 
-# ── Check DaggerConnect config exists ────────────────────────
+# ── Check DaggerConnect installed / config exists ─────────────
 section "Checking DaggerConnect"
+_dagger_config_found() {
+  [[ -f "/etc/DaggerConnect/server.yaml" ]] || [[ -f "/etc/DaggerConnect/client.yaml" ]]
+}
+
 if [[ -f "/etc/DaggerConnect/server.yaml" ]]; then
   ok_msg "Found server.yaml — this node will run as SERVER"
 elif [[ -f "/etc/DaggerConnect/client.yaml" ]]; then
   ok_msg "Found client.yaml — this node will run as CLIENT"
 else
-  die "Neither /etc/DaggerConnect/server.yaml nor client.yaml found.\nPlease install and configure DaggerConnect before running this installer."
+  warn_msg "DaggerConnect does not appear to be installed (no server.yaml or client.yaml found)."
+  echo ""
+  echo -e "  ${YLW}DaggerConnect is required before the panel can be installed.${NC}"
+  echo -e "  ${CYN}Install it now? [Y/n]:${NC}"
+  read -rp "  " INSTALL_DAGGER
+  INSTALL_DAGGER="${INSTALL_DAGGER:-y}"
+
+  if [[ "$INSTALL_DAGGER" =~ ^[Yy]$ ]]; then
+    section "Installing DaggerConnect"
+    TMP_SETUP=$(mktemp /tmp/dagger-setup-XXXX.sh)
+    curl -fsSL "https://raw.githubusercontent.com/itsFLoKi/DaggerConnect/main/setup.sh" \
+      -o "$TMP_SETUP" \
+      || die "Failed to download DaggerConnect setup.sh — check your internet connection"
+    chmod +x "$TMP_SETUP"
+    bash "$TMP_SETUP" || die "DaggerConnect setup failed — resolve the issue above and re-run this installer"
+    rm -f "$TMP_SETUP"
+
+    # Re-check after install
+    if _dagger_config_found; then
+      ok_msg "DaggerConnect installed and config detected — continuing..."
+    else
+      die "DaggerConnect was installed but no config file found yet.\nConfigure DaggerConnect first (server.yaml or client.yaml), then re-run this installer."
+    fi
+  else
+    die "DaggerConnect is required. Install and configure it, then re-run this installer."
+  fi
 fi
 
 # ── Panel port selection ──────────────────────────────────────
@@ -342,10 +422,24 @@ else
   ok_msg "Dependencies installed"
 fi
 
-# ── Download panel files ──────────────────────────────────────
+# ── Download panel files (latest release) ────────────────────
 $IS_UPDATE && section "Updating panel files" || section "Downloading panel files"
 
 mkdir -p "$INSTALL_DIR"
+
+# Resolve the latest release tag and build the raw base URL
+LATEST_TAG=$(curl -fsSL "$GITHUB_API" 2>/dev/null \
+  | grep '"tag_name"' | head -1 \
+  | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+
+if [[ -z "$LATEST_TAG" ]]; then
+  warn_msg "Could not fetch latest release tag from GitHub — falling back to 'main'"
+  RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPO}/main"
+else
+  ok_msg "Latest release: $LATEST_TAG"
+  RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPO}/${LATEST_TAG}"
+fi
+
 for FILE in "${FILES[@]}"; do
   curl -fsSL "${RAW_BASE}/${FILE}" -o "${INSTALL_DIR}/${FILE}" \
     && ok_msg "${FILE}" \

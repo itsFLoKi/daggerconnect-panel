@@ -544,6 +544,7 @@
 
     /* ── CHART CANVAS ── */
     .chart-wrapper{position:relative;margin-bottom:6px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
     .chart-canvas{width:100%;height:96px;display:block;cursor:crosshair;border-radius:6px;}
     .chart-tooltip{
       position:absolute;
@@ -595,6 +596,61 @@
       .stat-value{font-size:24px;}
       .login-card{padding:24px;}
     }
+
+    /* ── YAML SYNTAX HIGHLIGHT ── */
+    #yaml-editor {
+      background: transparent !important;
+      color: transparent !important;      /* hide raw text — colored spans in #yaml-hl-pre show through */
+      caret-color: var(--text) !important; /* keep cursor visible */
+      border: none !important;
+      outline: none !important;
+      resize: vertical;
+      z-index: 2;
+      position: relative;
+      min-height: 420px;
+      max-height: 70vh;
+    }
+    /* ── YAML syntax highlight ─────────────────────────────── */
+    #yaml-hl-pre               { color: #5c6d8a; }            /* plain fallback */
+    #yaml-hl-pre .hl-key       { color: #79c0ff; font-weight:600; letter-spacing:.01em; }  /* keys — blue  */
+    #yaml-hl-pre .hl-str       { color: #a5d6a7; }            /* "quoted" strings — green */
+    #yaml-hl-pre .hl-strbare   { color: #80cbc4; }            /* bare scalars — teal */
+    #yaml-hl-pre .hl-num       { color: #ffab70; }            /* numbers — amber */
+    #yaml-hl-pre .hl-bool      { color: #d2a8ff; font-weight:600; }   /* booleans — violet */
+    #yaml-hl-pre .hl-null      { color: #ff7b72; font-style:italic; } /* null / ~ — red */
+    #yaml-hl-pre .hl-cmt       { color: #3d5c80; font-style:italic; } /* comments — slate */
+    #yaml-hl-pre .hl-sep       { color: #7c5cfc; }            /* : [ ] { } | > — purple */
+    #yaml-hl-pre .hl-list      { color: #ffa657; font-weight:700; }   /* - dash — orange */
+    #yaml-hl-pre .hl-anchor    { color: #f97316; font-style:italic; } /* &anchor *alias */
+    #yaml-hl-pre .hl-doc       { color: #6b7fa3; font-weight:700; letter-spacing:.05em; } /* --- ... */
+    /* Bracket pairs in flow sequences / mappings */
+    #yaml-hl-pre .hl-bracket   { color: #e0c07a; }            /* [ ] { } */
+    /* Type tags  !!str  !!int  etc */
+    #yaml-hl-pre .hl-tag       { color: #56b6c2; font-style:italic; }
+
+    /* ── DIFF VIEWER ── */
+    .diff-line { font-family: 'Geist Mono', monospace; font-size: 10.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-all; padding: 0 12px; }
+    .diff-add  { background: rgba(15,207,142,.1); color: #6ee7b7; border-left: 3px solid var(--accent3); }
+    .diff-del  { background: rgba(240,75,75,.1); color: #fca5a5; border-left: 3px solid var(--danger); }
+    .diff-hunk { background: rgba(79,142,247,.08); color: var(--accent); border-left: 3px solid var(--accent); font-style: italic; }
+    .diff-ctx  { color: var(--text2); border-left: 3px solid transparent; }
+    .diff-container { max-height: 500px; overflow-y: auto; background: var(--bg3); border-radius: 8px; border: 1px solid var(--border); }
+
+    /* ── WS STATUS ── */
+    #ws-pill { transition: all .3s; }
+    #ws-pill.ws-on  { background: rgba(15,207,142,.1); border: 1px solid rgba(15,207,142,.2); color: var(--accent3); }
+    #ws-pill.ws-off { background: rgba(244,161,24,.1); border: 1px solid rgba(244,161,24,.2); color: var(--accent4); }
+    #ws-pill.ws-err { background: rgba(240,75,75,.1); border: 1px solid rgba(240,75,75,.2); color: var(--danger); }
+
+    /* ── METRICS 30D ── */
+    .metrics-period-tabs { display: flex; gap: 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+    .metrics-period-tab  { padding: 4px 10px; border-radius: 5px; font-family: 'Geist Mono', monospace; font-size: 9px; cursor: pointer; color: var(--text2); transition: all .15s; }
+    .metrics-period-tab.active { background: var(--accent); color: #fff; }
+    .metrics-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+    @media(max-width:700px) { .metrics-summary-grid { grid-template-columns: repeat(2,1fr); } }
+    .metrics-summary-cell { background: rgba(8,10,22,.7); border: 1px solid var(--border); border-radius: 9px; padding: 12px; }
+    .metrics-summary-period { font-family: 'Geist Mono', monospace; font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+    .metrics-summary-val { font-size: 16px; font-weight: 700; letter-spacing: -.03em; }
   </style>
 </head>
 <body>
@@ -626,22 +682,30 @@
     <div class="nav-item active" role="button" tabindex="0" aria-label="Dashboard" onclick="switchTab('dashboard')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('dashboard')"><span class="icon">📊</span> Dashboard <span class="nav-badge nb-green" id="nb-live">Live</span></div>
     <div class="nav-item" role="button" tabindex="0" aria-label="Services" onclick="switchTab('services')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('services')"><span class="icon">⚙️</span> Services</div>
     <div class="nav-item" role="button" tabindex="0" aria-label="Live Logs" onclick="switchTab('logs')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('logs')"><span class="icon">📋</span> Live Logs</div>
+    <div class="nav-item" role="button" tabindex="0" aria-label="Audit Log" onclick="switchTab('audit')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('audit')"><span class="icon">📝</span> Audit Log</div>
 
     <div class="nav-label">Setup</div>
     <div class="nav-item" role="button" tabindex="0" aria-label="Config Wizard" onclick="openWizard()" onkeydown="if(event.key==='Enter'||event.key===' ')openWizard()"><span class="icon">🧙</span> Config Wizard</div>
+
 
     <div class="nav-label">Configuration</div>
     <div class="nav-item" id="nav-server" role="button" tabindex="0" aria-label="Server Config" onclick="switchTab('server')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('server')"><span class="icon">🖥️</span> Server Config</div>
     <div class="nav-item" id="nav-client" role="button" tabindex="0" aria-label="Client Config" onclick="switchTab('client')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('client')"><span class="icon">💻</span> Client Config</div>
     <div class="nav-item" id="nav-ports" role="button" tabindex="0" aria-label="Port Map Monitor" onclick="switchTab('ports')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('ports')"><span class="icon">🔌</span> Port Map Monitor</div>
+    <div class="nav-item" id="nav-connections" role="button" tabindex="0" aria-label="Connections & GeoIP" onclick="switchTab('connections')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('connections')"><span class="icon">🔗</span> Connections &amp; GeoIP</div>
+
+    <div class="nav-item" role="button" tabindex="0" aria-label="Bandwidth Budget" onclick="switchTab('bandwidth')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('bandwidth')"><span class="icon">📶</span> Bandwidth Budget</div>
 
     <div class="nav-label">Advanced</div>
     <div class="nav-item" role="button" tabindex="0" aria-label="Transport Protocols" onclick="switchTab('transport')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('transport')"><span class="icon">🌐</span> Transport / HTTP Mimic</div>
     <div class="nav-item" role="button" tabindex="0" aria-label="Obfuscation" onclick="switchTab('obfuscation')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('obfuscation')"><span class="icon">🎭</span> Obfuscation</div>
     <div class="nav-item" role="button" tabindex="0" aria-label="Security TLS" onclick="switchTab('security')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('security')"><span class="icon">🔒</span> Security / TLS</div>
+    <div class="nav-item" role="button" tabindex="0" aria-label="Token Auth" onclick="switchTab('auth-mgmt')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('auth-mgmt')"><span class="icon">🔑</span> Token &amp; Auth</div>
+
+
+    <div class="nav-item" role="button" tabindex="0" aria-label="Resource Quota" onclick="switchTab('quota')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('quota')"><span class="icon">⚖️</span> Resource Quota</div>
 
     <div class="nav-label">Tools</div>
-    <div class="nav-item" role="button" tabindex="0" aria-label="Active Connections" onclick="switchTab('connections')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('connections')"><span class="icon">🔗</span> Active Connections</div>
     <div class="nav-item" role="button" tabindex="0" aria-label="YAML Editor" onclick="switchTab('yaml')" onkeydown="if(event.key==='Enter'||event.key===' ')switchTab('yaml')"><span class="icon">📄</span> YAML Editor</div>
   </nav>
 
@@ -670,6 +734,7 @@
     </div>
     <div class="topbar-title"><span>Dagger</span>Connect</div>
     <div id="global-pill" class="pill pill-amber"><div class="pdot pdot-a"></div> Connecting…</div>
+    <div id="ws-pill" class="pill ws-off" style="font-size:9px;padding:3px 8px;display:flex;align-items:center;gap:5px" title="HTTP polling active"><div class="pdot" id="ws-dot" style="width:5px;height:5px;background:var(--accent4);border-radius:50%"></div> <span id="ws-label">Polling</span></div>
     <span class="text-mono text-xs text-muted topbar-desktop-btns" id="clock"></span>
     <button class="btn btn-ghost topbar-desktop-btns" onclick="reloadAll()">↺ Refresh</button>
     <button class="btn btn-danger topbar-desktop-btns" onclick="confirmAndStop()">&#x25a0; Stop All</button>
@@ -739,8 +804,10 @@
                 <button class="chart-range-btn" data-range="60" onclick="setChartRange(60,this)">5m</button>
                 <button class="chart-range-btn" data-range="720" onclick="setChartRange(720,this)">1h</button>
                 <button class="chart-range-btn" data-range="2880" onclick="setChartRange(2880,this)">4h</button>
+                <button class="chart-range-btn" data-range="17280" onclick="setChartRange(17280,this)">24h</button>
               </div>
               <button class="btn btn-ghost" style="font-size:9px;padding:3px 8px" onclick="toggleCombinedChart(this)">⊕ Combined</button>
+              <button class="btn btn-ghost" style="font-size:9px;padding:3px 8px" onclick="openMetricsHistory()">📈 History</button>
             </div>
           </div>
           <!-- Stats summary row -->
@@ -786,6 +853,7 @@
                 <button class="chart-range-btn" data-range="60" onclick="setResRange(60,this)">5m</button>
                 <button class="chart-range-btn" data-range="720" onclick="setResRange(720,this)">1h</button>
                 <button class="chart-range-btn" data-range="2880" onclick="setResRange(2880,this)">4h</button>
+                <button class="chart-range-btn" data-range="17280" onclick="setResRange(17280,this)">24h</button>
               </div>
             </div>
             <div class="card-body">
@@ -1512,12 +1580,28 @@
         <div class="section-div"></div>
         <span class="text-muted text-xs" id="conn-daggermux-note" style="font-size:10px;max-width:320px;line-height:1.4;text-align:right"></span>
         <button class="btn btn-ghost" onclick="loadConnections()">↺ Refresh</button>
+        <button class="btn btn-ghost" onclick="resolveConnectionsGeoIP()" id="geoip-btn">🌍 Resolve GeoIP</button>
+      </div>
+      <div class="flex mb16" style="gap:8px;flex-wrap:wrap">
+        <input type="text" id="conn-search" placeholder="Search IP, port, state…" style="flex:1;min-width:160px;max-width:280px" oninput="filterConnections()">
+        <select id="conn-state-filter" style="width:120px" onchange="filterConnections()">
+          <option value="">All states</option>
+          <option value="ESTAB">ESTABLISHED</option>
+          <option value="TIME-WAIT">TIME-WAIT</option>
+          <option value="CLOSE-WAIT">CLOSE-WAIT</option>
+          <option value="SYN-SENT">SYN-SENT</option>
+        </select>
+        <select id="conn-port-filter" style="width:130px" onchange="filterConnections()">
+          <option value="">All ports</option>
+        </select>
+        <button class="btn btn-ghost" style="font-size:10px;padding:4px 8px" onclick="toggleConnAutoRefresh()" id="conn-autorefresh-btn">▶ Auto-refresh (10s)</button>
+        <span class="text-mono text-xs text-muted mla" id="conn-filter-count" style="align-self:center"></span>
       </div>
       <div class="card mb16">
         <div class="card-body" style="padding:0">
           <table>
-            <thead><tr><th>Local</th><th>Remote</th><th>State</th><th>Port</th></tr></thead>
-            <tbody id="conn-table"><tr><td colspan="4" class="text-muted text-mono text-sm" style="padding:14px">Click Refresh to load.</td></tr></tbody>
+            <thead><tr><th>Local</th><th>Remote</th><th>State</th><th>Port</th><th>Country</th><th>ASN / Org</th></tr></thead>
+            <tbody id="conn-table"><tr><td colspan="6" class="text-muted text-mono text-sm" style="padding:14px">Click Refresh to load.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -1542,27 +1626,170 @@
       <div class="section-head">
         <h2>YAML Editor</h2>
         <div class="section-div"></div>
-        <select id="yaml-target" style="width:160px">
+        <select id="yaml-target" style="width:160px" onchange="loadConfig(this.value)">
           <option value="server">Server Config</option>
           <option value="client">Client Config</option>
         </select>
         <button class="btn btn-ghost" onclick="loadConfig(document.getElementById('yaml-target').value)">↺ Load</button>
         <button class="btn btn-ghost" onclick="importYamlToWizard()" title="Re-import YAML into wizard">🧙 Import to Wizard</button>
-        <button class="btn btn-primary" onclick="confirmSaveYaml()">💾 Save & Restart</button>
+        <button class="btn btn-ghost" onclick="importConfigBundle()" title="Import a config bundle">📦 Import Bundle</button>
+        <button class="btn btn-ghost" onclick="showYamlDiff()" id="yaml-diff-btn" style="display:none">⟺ Diff</button>
+        <button class="btn btn-primary" onclick="confirmSaveYaml()">💾 Save &amp; Restart</button>
+      </div>
+      <!-- Preview banner - shown when YAML is from wizard/form, not disk -->
+      <div id="yaml-preview-banner" style="display:none;margin-bottom:10px;padding:10px 16px;border-radius:8px;align-items:center;gap:10px">
+        <span style="font-size:14px" id="yaml-preview-icon">👁</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600" id="yaml-preview-title">Previewing generated config</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px" id="yaml-preview-subtitle">Review and edit the YAML below, then click <strong>Save & Restart</strong> to apply, or <strong>Discard</strong> to revert to disk.</div>
+        </div>
+        <button class="btn btn-ghost" style="font-size:10px" onclick="discardYamlPreview()">✕ Discard</button>
+        <button class="btn btn-primary" onclick="confirmSaveYaml()">Apply & Restart</button>
       </div>
       <!-- Validation status bar -->
       <div id="yaml-validation-bar" style="margin-bottom:10px;padding:7px 14px;border-radius:8px;font-family:'Geist Mono',monospace;font-size:10px;display:none;align-items:center;gap:8px"></div>
-      <div class="card">
-        <div class="card-body" style="padding:0">
-          <textarea id="yaml-editor" oninput="liveValidateYaml()">Loading…</textarea>
+      <div class="card" style="position:relative">
+        <!-- Syntax-highlighted overlay -->
+        <div class="card-body" style="padding:0;position:relative">
+          <div id="yaml-hl-wrapper" style="position:relative;font-family:'Geist Mono',monospace;font-size:11.5px;line-height:1.6">
+            <!-- Line numbers -->
+            <div id="yaml-line-nums" style="position:absolute;left:0;top:0;bottom:0;width:42px;background:rgba(0,0,0,.3);border-right:1px solid var(--border);padding:12px 0;text-align:right;color:var(--text3);font-size:10px;line-height:1.6;user-select:none;overflow:hidden;white-space:nowrap"></div>
+            <!-- Syntax highlight preview layer -->
+            <pre id="yaml-hl-pre" style="margin:0;padding:12px 12px 12px 54px;overflow:auto;white-space:pre-wrap;word-break:break-word;pointer-events:none;position:absolute;inset:0;color:transparent;z-index:1;background:transparent;font-size:11.5px;line-height:1.6;font-family:'Geist Mono',monospace"></pre>
+            <!-- Actual editable textarea -->
+            <textarea id="yaml-editor" oninput="onYamlInput()" onscroll="syncYamlScroll()" style="position:relative;z-index:2;background:transparent;color:transparent;min-height:420px;max-height:70vh;padding:12px 12px 12px 54px;resize:vertical;border:none;outline:none;line-height:1.6;caret-color:var(--text)">Loading…</textarea>
+          </div>
         </div>
         <div class="card-footer">
           <span class="text-mono text-xs text-muted" id="yaml-file-label">/etc/DaggerConnect/server.yaml</span>
+          <span id="yaml-cursor-pos" class="text-mono text-xs text-muted" style="margin-left:8px"></span>
           <button class="btn btn-ghost mla" onclick="validateYaml()">✓ Validate</button>
+          <button class="btn btn-ghost" onclick="showYamlDiff()" id="yaml-diff-btn2">⟺ Diff</button>
+          <button class="btn btn-ghost" onclick="showConfigBackups(document.getElementById('yaml-target').value)">💾 Backups</button>
+          <button class="btn btn-ghost" onclick="exportConfigBundle()">📦 Export Bundle</button>
           <button class="btn btn-primary" onclick="confirmSaveYaml()">Apply & Restart</button>
         </div>
       </div>
     </div>
+
+
+    <!-- ── NEW FEATURE TABS ── -->
+
+    <div class="tab-view" id="tab-audit">
+  <div class="section-head"><h2>Config Change Audit Log</h2><div class="section-div"></div>
+    <button class="btn btn-ghost" onclick="loadAuditLog()">↺ Refresh</button>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
+        <tbody id="audit-table"><tr><td colspan="4" class="text-muted text-mono text-sm" style="padding:14px">Click Refresh to load.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+<div class="tab-view" id="tab-bandwidth">
+  <div class="section-head"><h2>Bandwidth Budget / Usage Tracker</h2><div class="section-div"></div>
+    <button class="btn btn-ghost" onclick="loadBandwidth()">↺ Refresh</button>
+  </div>
+
+  <div id="bandwidth-alarm-banner" style="display:none;align-items:center;gap:12px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:var(--warn)">
+    <span style="font-size:16px">⚠️</span>
+    <div id="bandwidth-alarm-text"><strong>Quota Alarm:</strong> Loading...</div>
+    <button class="btn btn-ghost" style="font-size:10px;margin-left:auto" onclick="clearQuotaAlarm()">Dismiss</button>
+  </div>
+
+  <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat-card"><div class="stat-icon">📥</div><div class="stat-val" id="bw-today-rx">—</div><div class="stat-label">Today RX</div></div>
+    <div class="stat-card"><div class="stat-icon">📤</div><div class="stat-val" id="bw-today-tx">—</div><div class="stat-label">Today TX</div></div>
+    <div class="stat-card"><div class="stat-icon">⚡</div><div class="stat-val" id="bw-today-total">—</div><div class="stat-label">Today Total</div></div>
+    <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-val" id="bw-week-total">—</div><div class="stat-label">This Week</div></div>
+    <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-val" id="bw-month-total">—</div><div class="stat-label">This Month</div></div>
+  </div>
+</div>
+
+<div class="tab-view" id="tab-auth-mgmt">
+  <div class="section-head"><h2>Token / Auth Management</h2><div class="section-div"></div></div>
+  <div class="card mb16">
+    <div class="card-header"><span class="card-title">Current Auth Status</span><div id="auth-status-pill" class="pill mla">—</div></div>
+    <div class="card-body">
+      <p class="text-muted" style="font-size:12px;margin-bottom:14px">Set a token to require authentication for all panel API calls. Keep it secret — anyone with the token has full panel access.</p>
+      <div class="form-group" style="max-width:480px;margin-bottom:14px">
+        <label>New Token</label>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="new-auth-token" placeholder="Enter new token (min 12 chars)" style="flex:1">
+          <button class="btn btn-ghost" onclick="document.getElementById('new-auth-token').type=document.getElementById('new-auth-token').type==='password'?'text':'password'">👁</button>
+          <button class="btn btn-ghost" onclick="generateAuthToken()">Generate</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="setAuthToken()">🔑 Set Token</button>
+        <button class="btn btn-danger" onclick="clearAuthToken()">🗑 Clear Token (disable auth)</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Token Best Practices</span></div>
+    <div class="card-body">
+      <ul style="font-size:12px;color:var(--text2);line-height:1.8;padding-left:16px">
+        <li>Use at least 32 random hex characters</li>
+        <li>Store securely — never commit to version control</li>
+        <li>Rotate regularly or after suspected exposure</li>
+        <li>Token is stored in <code>/etc/DaggerConnect/panel.token</code></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+<div class="tab-view" id="tab-quota">
+  <div class="section-head"><h2>Resource Quota Enforcer</h2><div class="section-div"></div>
+    <button class="btn btn-ghost" onclick="loadQuotaConfig()">↺ Refresh</button>
+  </div>
+  <div id="quota-alarm-banner" style="display:none;align-items:center;gap:12px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:var(--warn)"></div>
+  <div class="card mb16">
+    <div class="card-header"><span class="card-title">Resource Limits</span></div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:16px">If DaggerConnect processes exceed the limits below, the panel will auto-restart them and log the event to the audit log.</p>
+      <div class="form-row2">
+        <div class="form-group">
+          <label>Max CPU %</label>
+          <input type="number" id="quota-max-cpu" placeholder="e.g. 90" min="0" max="100" step="1">
+        </div>
+        <div class="form-group">
+          <label>Max RAM (MB)</label>
+          <input type="number" id="quota-max-mem" placeholder="e.g. 512" min="0" step="1">
+        </div>
+      </div>
+      <div class="toggle-row">
+        <label>Enable Enforcement</label>
+        <div class="toggle" id="quota-enabled-toggle" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveQuotaConfig()">💾 Save Quota Config</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Set to 0 to disable a limit. Enforcement runs every 5s via the WebSocket loop.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Recent Quota Events</span></div>
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
+        <tbody id="quota-events-table"><tr><td colspan="3" class="text-muted text-mono text-sm" style="padding:14px">No events yet.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 
   </div><!-- /content -->
 </div><!-- /main -->
@@ -1592,6 +1819,95 @@
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="document.getElementById('add-port-modal').classList.remove('open')">Cancel</button>
       <button class="btn btn-primary" onclick="addPortMap()">Add Mapping</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── YAML DIFF MODAL ── -->
+<div class="modal-ov" id="yaml-diff-modal">
+  <div class="modal" style="max-width:820px;width:96%">
+    <div class="modal-head">
+      <span style="font-size:18px">⟺</span>
+      <h3>Config Diff — Current vs Proposed</h3>
+      <div class="mla" style="display:flex;align-items:center;gap:10px">
+        <div id="diff-stats" class="flex" style="gap:8px;font-family:'Geist Mono',monospace;font-size:10px"></div>
+        <div class="icn-btn" onclick="document.getElementById('yaml-diff-modal').classList.remove('open')">✕</div>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div id="diff-loading" style="padding:24px;text-align:center;color:var(--text2);font-family:'Geist Mono',monospace;font-size:11px">Computing diff…</div>
+      <div class="diff-container" id="diff-output" style="display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="document.getElementById('yaml-diff-modal').classList.remove('open')">Close</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-danger" onclick="document.getElementById('yaml-diff-modal').classList.remove('open');discardYamlPreview()">✕ Discard Changes</button>
+      <button class="btn btn-primary" onclick="document.getElementById('yaml-diff-modal').classList.remove('open');confirmSaveYaml()">Apply & Restart</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- ── METRICS HISTORY MODAL ── -->
+<div class="modal-ov" id="metrics-history-modal">
+  <div class="modal" style="max-width:900px;width:96%">
+    <div class="modal-head">
+      <span style="font-size:18px">📈</span>
+      <h3>Metrics History</h3>
+      <div class="icn-btn mla" onclick="document.getElementById('metrics-history-modal').classList.remove('open')">✕</div>
+    </div>
+    <div class="modal-body">
+      <!-- Period selector -->
+      <div class="flex mb16" style="gap:12px;flex-wrap:wrap;align-items:center">
+        <div class="metrics-period-tabs" id="metrics-period-tabs">
+          <div class="metrics-period-tab active" onclick="loadMetricsPeriod('1h',this)">1H</div>
+          <div class="metrics-period-tab" onclick="loadMetricsPeriod('6h',this)">6H</div>
+          <div class="metrics-period-tab" onclick="loadMetricsPeriod('24h',this)">24H</div>
+          <div class="metrics-period-tab" onclick="loadMetricsPeriod('7d',this)">7D</div>
+          <div class="metrics-period-tab" onclick="loadMetricsPeriod('30d',this)">30D</div>
+        </div>
+        <span class="text-mono text-xs text-muted mla" id="metrics-period-label"></span>
+      </div>
+      <!-- Summary stats for period -->
+      <div class="metrics-summary-grid" id="metrics-summary-grid"></div>
+      <!-- Charts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;position:relative" id="metrics-charts-grid">
+        <div id="metrics-loading-overlay" style="display:none;position:absolute;inset:0;background:rgba(5,7,16,0.92);backdrop-filter:blur(8px);z-index:10;border-radius:12px;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+          <div style="width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--text2)">Loading metrics...</div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span>💻</span><span class="card-title" style="font-size:12px">CPU</span></div>
+          <div class="card-body" style="padding:12px">
+            <div class="chart-wrapper"><canvas id="mh-cpu" class="chart-canvas" height="100"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span>🧠</span><span class="card-title" style="font-size:12px">RAM</span></div>
+          <div class="card-body" style="padding:12px">
+            <div class="chart-wrapper"><canvas id="mh-ram" class="chart-canvas" height="100"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span>⬇️</span><span class="card-title" style="font-size:12px">Network RX</span></div>
+          <div class="card-body" style="padding:12px">
+            <div class="chart-wrapper"><canvas id="mh-rx" class="chart-canvas" height="100"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span>🔗</span><span class="card-title" style="font-size:12px">Connections</span></div>
+          <div class="card-body" style="padding:12px">
+            <div class="chart-wrapper"><canvas id="mh-conns" class="chart-canvas" height="100"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div id="metrics-no-data" style="display:none;text-align:center;padding:32px;color:var(--text2);font-family:'Geist Mono',monospace;font-size:11px">
+        No data for this period yet. Data is collected every 5 seconds while the panel API is running.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="document.getElementById('metrics-history-modal').classList.remove('open')">Close</button>
     </div>
   </div>
 </div>
@@ -1675,17 +1991,29 @@
     return arr.slice(-n);
   }
 
+  function getWindowPair(dataArr, tsArr, n) {
+    if (!n || n >= dataArr.length) {
+      return { data: dataArr.slice(), ts: tsArr ? tsArr.slice() : null };
+    }
+    const startIdx = Math.max(0, dataArr.length - n);
+    return {
+      data: dataArr.slice(startIdx),
+      ts: tsArr ? tsArr.slice(startIdx) : null
+    };
+  }
+
   // ── Load server-side history on startup ───────────────────────
   async function loadServerHistory() {
     try {
-      const d = await api('/api/metrics/history?points=2880');
+      // Try new SQLite-backed API first (24h of raw points)
+      const from24h = Date.now() - 86400000;
+      const d = await api(`/api/metrics/history?range=raw&points=17280&from=${from24h}`);
       if (!d.ok || !d.points || d.points.length === 0) return;
       const pts = d.points;
       // Only load if we have fewer local points (server has more history)
       if (pts.length <= dlHistory.length) return;
 
       // Rebuild history arrays from server data
-      // Note: server doesn't have rx/tx delta, only raw bytes — compute speed from consecutive points
       const newCpu  = []; const newRam  = [];
       const newCpuTs = []; const newRamTs = [];
       const newDl = []; const newUl = [];
@@ -1725,100 +2053,226 @@
     } catch(e) { console.warn('History load failed:', e); }
   }
 
-  function drawChart(canvasId, history, color1, color2, label) {
+  function _lttb(data, timestamps, threshold) {
+    const n = data.length;
+    if (threshold >= n || n <= 2) return { data: data.slice(), timestamps: timestamps ? timestamps.slice() : null };
+    const sampled = [0];
+    let a = 0;
+    const bucketSize = (n - 2) / (threshold - 2);
+    for (let i = 0; i < threshold - 2; i++) {
+      const rangeStart = Math.floor((i + 1) * bucketSize) + 1;
+      const rangeEnd   = Math.min(Math.floor((i + 2) * bucketSize) + 1, n);
+      let avgX = 0, avgY = 0, count = 0;
+      for (let j = rangeStart; j < rangeEnd; j++) { avgX += j; avgY += data[j]; count++; }
+      avgX /= count; avgY /= count;
+      const bucketStart2 = Math.floor((i) * bucketSize) + 1;
+      const bucketEnd2   = Math.min(Math.floor((i + 1) * bucketSize) + 1, n);
+      let maxArea = -1, maxIdx = bucketStart2;
+      for (let j = bucketStart2; j < bucketEnd2; j++) {
+        const area = Math.abs((a - avgX) * (data[j] - data[a]) - (a - j) * (avgY - data[a]));
+        if (area > maxArea) { maxArea = area; maxIdx = j; }
+      }
+      sampled.push(maxIdx);
+      a = maxIdx;
+    }
+    sampled.push(n - 1);
+    return {
+      data: sampled.map(i => data[i]),
+      timestamps: timestamps ? sampled.map(i => timestamps[i]) : null,
+    };
+  }
+
+  function _fmtTime(ts, spanMs) {
+    const d = new Date(ts);
+    const hh = d.getHours().toString().padStart(2,'0');
+    const mm = d.getMinutes().toString().padStart(2,'0');
+    if (spanMs > 86400000 * 1.5) {
+      const mo = (d.getMonth()+1).toString().padStart(2,'0');
+      const dd = d.getDate().toString().padStart(2,'0');
+      return mo + '/' + dd + ' ' + hh + ':' + mm;
+    }
+    return hh + ':' + mm;
+  }
+
+  function drawChart(canvasId, history, color1, color2, label, timestamps) {
     const canvas = document.getElementById(canvasId);
     if (!canvas || !canvas.getContext) return;
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.clientWidth;
-    if (!W) return;  // not visible yet
+    if (!W) return;
     const H = canvas.clientHeight || 90;
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const n = history.length;
-    const max = n > 0 ? Math.max(...history, 0.001) : 0.001;
     const pad = { t: 8, r: 8, b: 18, l: 42 };
     const gW = W - pad.l - pad.r;
     const gH = H - pad.t - pad.b;
 
-    // Background
-    ctx.fillStyle = '#070910';
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#08091280');
+    bgGrad.addColorStop(1, '#05061080');
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    if (n === 0) {
-      ctx.fillStyle = '#4a5568';
-      ctx.font = '9px monospace';
-      ctx.textAlign = 'center';
+    const rawN = history.length;
+    if (rawN === 0) {
+      ctx.fillStyle = '#4a5568'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
       ctx.fillText('No data yet', W / 2, H / 2 + 3);
       return;
     }
 
-    // Grid lines
-    ctx.strokeStyle = 'rgba(30,34,53,0.9)';
-    ctx.lineWidth = 1;
+    const MAX_VISIBLE = Math.max(Math.ceil(gW / 2), 200);
+    const needsDecimate = rawN > MAX_VISIBLE;
+    let pts, ts;
+    if (needsDecimate) {
+      const s = _lttb(history, timestamps || null, MAX_VISIBLE);
+      pts = s.data; ts = s.timestamps;
+    } else {
+      pts = history.slice(); ts = timestamps ? timestamps.slice() : null;
+    }
+    const n = pts.length;
+
+    const max = Math.max(...pts, 0.001);
+    const isPercent = label.includes('%');
+
+    ctx.strokeStyle = 'rgba(30,34,53,0.6)'; ctx.lineWidth = 1;
     [0, 0.25, 0.5, 0.75, 1].forEach(f => {
       const y = Math.round(pad.t + gH * (1 - f)) + 0.5;
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + gW, y); ctx.stroke();
     });
 
-    // Y-axis labels — smart formatting
-    ctx.fillStyle = '#4a5568';
-    ctx.font = '8px monospace';
-    ctx.textAlign = 'right';
-    const isPercent = label.includes('%');
+    ctx.fillStyle = '#4a5568'; ctx.font = '8px monospace'; ctx.textAlign = 'right';
     [0, 0.5, 1].forEach(f => {
       let val;
-      if (isPercent) val = (max * f).toFixed(0) + '%';
+      if (isPercent)       val = (max * f).toFixed(0) + '%';
       else if (max >= 100) val = (max * f).toFixed(0);
-      else if (max >= 1) val = (max * f).toFixed(1);
-      else val = (max * f).toFixed(2);
-      const y = pad.t + gH * (1 - f) + 3;
-      ctx.fillText(val, pad.l - 4, y);
+      else if (max >= 1)   val = (max * f).toFixed(1);
+      else                 val = (max * f).toFixed(2);
+      ctx.fillText(val, pad.l - 4, pad.t + gH * (1 - f) + 3);
     });
 
-    // xStep: pixel width between each data point
-    const xOf = i => pad.l + (n > 1 ? (i / (n - 1)) * gW : gW / 2);
-    const yOf = v => pad.t + gH * (1 - v / max);
+    const hasTs = ts && ts.length === n && n > 1;
+    const tMin = hasTs ? ts[0] : 0;
+    const tMax = hasTs ? ts[n - 1] : n - 1;
+    const tSpan = tMax - tMin || 1;
 
-    // Area gradient fill
-    if (history.some(v => v > 0)) {
+    const xOf = i => {
+      if (!hasTs || n < 2) return pad.l + (n > 1 ? (i / (n - 1)) * gW : gW / 2);
+      return pad.l + ((ts[i] - tMin) / tSpan) * gW;
+    };
+    const yOf = v => pad.t + gH * (1 - Math.max(0, Math.min(max, v)) / max);
+
+    const GAP_MULTIPLIER = 10;
+    let medianInterval = 5000;
+    if (hasTs && n > 2) {
+      const intervals = [];
+      for (let i = 1; i < n; i++) {
+        const iv = ts[i] - ts[i-1];
+        if (iv > 0 && iv < 3600000) intervals.push(iv);
+      }
+      if (intervals.length > 0) {
+        intervals.sort((a, b) => a - b);
+        medianInterval = intervals[Math.floor(intervals.length / 2)];
+      }
+    }
+    const isGap = i => hasTs && i > 0 && (ts[i] - ts[i-1]) > GAP_MULTIPLIER * medianInterval;
+
+    const segments = [];
+    let seg = [0];
+    for (let i = 1; i < n; i++) {
+      if (isGap(i)) { segments.push(seg); seg = [i]; }
+      else seg.push(i);
+    }
+    segments.push(seg);
+
+    const showDots = n <= 60;
+
+    segments.forEach(indices => {
+      if (!indices.length) return;
+      if (!indices.some(i => pts[i] > 0)) return;
+
       const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + gH);
-      grad.addColorStop(0, color1 + '55');
-      grad.addColorStop(1, color1 + '05');
+      grad.addColorStop(0, color1 + '42');
+      grad.addColorStop(0.5, color1 + '18');
+      grad.addColorStop(1, color1 + '00');
       ctx.beginPath();
-      history.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v)); });
-      ctx.lineTo(xOf(n-1), pad.t + gH);
-      ctx.lineTo(xOf(0), pad.t + gH);
+      ctx.moveTo(xOf(indices[0]), yOf(pts[indices[0]]));
+      for (let k = 1; k < indices.length; k++) ctx.lineTo(xOf(indices[k]), yOf(pts[indices[k]]));
+      ctx.lineTo(xOf(indices[indices.length-1]), pad.t + gH);
+      ctx.lineTo(xOf(indices[0]), pad.t + gH);
       ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
+      ctx.fillStyle = grad; ctx.fill();
 
-      // Line
       ctx.beginPath();
-      ctx.strokeStyle = color1;
-      ctx.lineWidth = 1.5;
-      ctx.lineJoin = 'round';
-      history.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v)); });
+      ctx.strokeStyle = color1; 
+      ctx.lineWidth = 2; 
+      ctx.lineJoin = 'round'; 
+      ctx.lineCap = 'round';
+      ctx.shadowColor = color1 + '40';
+      ctx.shadowBlur = 4;
+      ctx.moveTo(xOf(indices[0]), yOf(pts[indices[0]]));
+      for (let k = 1; k < indices.length; k++) ctx.lineTo(xOf(indices[k]), yOf(pts[indices[k]]));
       ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      if (showDots) {
+        ctx.fillStyle = color1;
+        ctx.shadowColor = color1 + '60';
+        ctx.shadowBlur = 3;
+        indices.forEach(i => {
+          ctx.beginPath(); ctx.arc(xOf(i), yOf(pts[i]), 2.5, 0, 2*Math.PI); ctx.fill();
+        });
+        ctx.shadowBlur = 0;
+      }
+    });
+
+    if (hasTs) {
+      for (let i = 1; i < n; i++) {
+        if (isGap(i)) {
+          const x1 = xOf(i-1), x2 = xOf(i);
+          ctx.fillStyle = 'rgba(255,80,80,0.04)';
+          ctx.fillRect(x1, pad.t, x2-x1, gH);
+          ctx.strokeStyle = 'rgba(255,80,80,0.15)';
+          ctx.lineWidth = 1; ctx.setLineDash([2,4]);
+          ctx.beginPath(); ctx.moveTo((x1+x2)/2,pad.t); ctx.lineTo((x1+x2)/2,pad.t+gH); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
     }
 
-    // X-axis label: show time range
-    const rangeLabel = n > 1 ? _rangeStr(n) : '';
-    ctx.fillStyle = '#4a5568';
-    ctx.font = '8px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(label, pad.l, H - 2);
-    ctx.textAlign = 'right';
-    ctx.fillText(rangeLabel, W - pad.r, H - 2);
+    ctx.fillStyle = '#4a5568'; ctx.font = '8px monospace';
+    if (hasTs && tSpan > 0) {
+      const numLabels = Math.max(2, Math.min(5, Math.floor(gW / 70)));
+      ctx.textAlign = 'left';
+      ctx.fillText(_fmtTime(tMin, tSpan), pad.l, H - 2);
+      for (let i = 1; i < numLabels - 1; i++) {
+        const frac = i / (numLabels - 1);
+        const t = tMin + tSpan * frac;
+        const x = pad.l + gW * frac;
+        ctx.textAlign = 'center';
+        ctx.fillText(_fmtTime(t, tSpan), x, H - 2);
+      }
+      ctx.textAlign = 'right';
+      ctx.fillText(_fmtTime(tMax, tSpan), W - pad.r, H - 2);
+    } else {
+      ctx.textAlign = 'left';  ctx.fillText(label, pad.l, H - 2);
+      ctx.textAlign = 'right'; ctx.fillText(n > 1 ? _rangeStr(n) : '', W - pad.r, H - 2);
+    }
+
+    if (hasTs) {
+      ctx.fillStyle = '#6b7fa3'; ctx.font = '8px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(label, pad.l, pad.t + 8);
+    }
   }
 
   function _rangeStr(n) {
-    const secs = n * 5;  // 5s poll interval
+    const secs = n * 5;
     if (secs < 60) return secs + 's';
     if (secs < 3600) return Math.round(secs/60) + 'm';
-    return (secs/3600).toFixed(1) + 'h';
+    if (secs < 86400) return (secs/3600).toFixed(1) + 'h';
+    return (secs/86400).toFixed(1) + 'd';
   }
 
   function setupChartHover(canvasId, tooltipId, history, timestamps, color, unit) {
@@ -1834,27 +2288,46 @@
       const gW = rect.width - pad.l - pad.r;
       if (mx < pad.l || mx > pad.l + gW) { tip.style.opacity = '0'; return; }
 
-      // Use the same windowed view as drawChart
-      const viewArr = (() => {
-        if (canvasId === 'chart-dl')  return getWindow(dlHistory,  CHART_RANGE);
-        if (canvasId === 'chart-ul')  return getWindow(ulHistory,  CHART_RANGE);
-        if (canvasId === 'chart-cpu') return getWindow(cpuHistory, RES_RANGE);
-        if (canvasId === 'chart-ram') return getWindow(ramHistory, RES_RANGE);
-        return getWindow(history, CHART_RANGE);
-      })();
-      const viewTs = (() => {
-        if (canvasId === 'chart-dl')  return getWindow(dlTimestamps,  CHART_RANGE);
-        if (canvasId === 'chart-ul')  return getWindow(ulTimestamps,  CHART_RANGE);
-        if (canvasId === 'chart-cpu') return getWindow(cpuTimestamps, RES_RANGE);
-        if (canvasId === 'chart-ram') return getWindow(ramTimestamps, RES_RANGE);
-        return getWindow(timestamps, CHART_RANGE);
-      })();
+      let rawWin;
+      if (canvasId === 'chart-dl')  rawWin = getWindowPair(dlHistory, dlTimestamps, CHART_RANGE);
+      else if (canvasId === 'chart-ul')  rawWin = getWindowPair(ulHistory, ulTimestamps, CHART_RANGE);
+      else if (canvasId === 'chart-cpu') rawWin = getWindowPair(cpuHistory, cpuTimestamps, RES_RANGE);
+      else if (canvasId === 'chart-ram') rawWin = getWindowPair(ramHistory, ramTimestamps, RES_RANGE);
+      else rawWin = getWindowPair(history, timestamps, CHART_RANGE);
+
+      const rawArr = rawWin.data;
+      const rawTs = rawWin.ts;
+
+      const MAX_VIS = Math.max(Math.ceil(gW / 2), 200);
+      let viewArr, viewTs;
+      if (rawArr.length > MAX_VIS) {
+        const s = _lttb(rawArr, rawTs, MAX_VIS);
+        viewArr = s.data; viewTs = s.timestamps;
+      } else {
+        viewArr = rawArr; viewTs = rawTs;
+      }
+
       const n = viewArr.length;
       if (n === 0) { tip.style.opacity = '0'; return; }
 
-      const idx = Math.min(n - 1, Math.max(0, Math.round(((mx - pad.l) / gW) * (n - 1))));
+      const hasTs = viewTs && viewTs.length === n && n > 1;
+      let idx;
+      if (hasTs) {
+        const tMin = viewTs[0], tSpan = (viewTs[n-1] - tMin) || 1;
+        const tAtMouse = tMin + ((mx - pad.l) / gW) * tSpan;
+        idx = 0;
+        let bestDist = Math.abs(viewTs[0] - tAtMouse);
+        for (let i = 1; i < n; i++) {
+          const d = Math.abs(viewTs[i] - tAtMouse);
+          if (d < bestDist) { bestDist = d; idx = i; }
+        }
+      } else {
+        idx = Math.min(n - 1, Math.max(0, Math.round(((mx - pad.l) / gW) * (n - 1))));
+      }
+
       const val = viewArr[idx] || 0;
-      const ts  = viewTs[idx];
+      const ts  = viewTs ? viewTs[idx] : null;
+      const tSpanMs = hasTs ? (viewTs[n-1] - viewTs[0]) : 0;
       const timeStr = ts ? new Date(ts).toLocaleTimeString('en-US', { hour12: false }) : '—';
       const max = Math.max(...viewArr, 0.001);
       const pct = ((val / max) * 100).toFixed(0);
@@ -1863,7 +2336,6 @@
       tip.innerHTML = `<span style="color:${color};font-weight:700">${fmt(val)}</span>  <span style="color:#4a5568">${timeStr}</span><br><span style="color:#4a5568">Peak: ${fmt(max)} · ${pct}% of peak</span>`;
       tip.style.opacity = '1';
 
-      // Position tooltip: keep inside canvas
       const tipW = tip.offsetWidth || 180;
       let left = mx + 10;
       if (left + tipW > rect.width) left = mx - tipW - 10;
@@ -1872,7 +2344,6 @@
 
     canvas.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
 
-    // Touch support
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
       const t = e.touches[0];
@@ -1881,40 +2352,49 @@
     canvas.addEventListener('touchend', () => { tip.style.opacity = '0'; });
   }
 
-  function updateChart(type, val) {
-    const now = Date.now();
-    const MAX = 2880;
+  function updateChart(type, val, timestamp) {
+    const now = timestamp || Date.now();
+    const MAX = 17280;
     if (type === 'dl') {
       dlHistory.push(val);   if (dlHistory.length > MAX)   dlHistory.shift();
       dlTimestamps.push(now); if (dlTimestamps.length > MAX) dlTimestamps.shift();
       saveHistory('dl', dlHistory); saveHistory('dl_ts', dlTimestamps);
-      drawChart('chart-dl', getWindow(dlHistory, CHART_RANGE), '#00d4ff', '#7c3aed', '↓ Download (Mbps)');
+      const win = getWindowPair(dlHistory, dlTimestamps, CHART_RANGE);
+      drawChart('chart-dl', win.data, '#00d4ff', '#7c3aed', '↓ Download (Mbps)', win.ts);
       updateNetStats();
     } else if (type === 'ul') {
       ulHistory.push(val);   if (ulHistory.length > MAX)   ulHistory.shift();
       ulTimestamps.push(now); if (ulTimestamps.length > MAX) ulTimestamps.shift();
       saveHistory('ul', ulHistory); saveHistory('ul_ts', ulTimestamps);
-      drawChart('chart-ul', getWindow(ulHistory, CHART_RANGE), '#10b981', '#059669', '↑ Upload (Mbps)');
+      const win = getWindowPair(ulHistory, ulTimestamps, CHART_RANGE);
+      drawChart('chart-ul', win.data, '#10b981', '#059669', '↑ Upload (Mbps)', win.ts);
       if (combinedMode) drawCombinedChart();
     } else if (type === 'cpu') {
       cpuHistory.push(val);   if (cpuHistory.length > MAX)   cpuHistory.shift();
       cpuTimestamps.push(now); if (cpuTimestamps.length > MAX) cpuTimestamps.shift();
       saveHistory('cpu', cpuHistory); saveHistory('cpu_ts', cpuTimestamps);
-      drawChart('chart-cpu', getWindow(cpuHistory, RES_RANGE), '#4f8ef7', '#7c5cfc', 'CPU (%)');
+      const win = getWindowPair(cpuHistory, cpuTimestamps, RES_RANGE);
+      drawChart('chart-cpu', win.data, '#4f8ef7', '#7c5cfc', 'CPU (%)', win.ts);
       updateResStats();
     } else if (type === 'ram') {
       ramHistory.push(val);   if (ramHistory.length > MAX)   ramHistory.shift();
       ramTimestamps.push(now); if (ramTimestamps.length > MAX) ramTimestamps.shift();
       saveHistory('ram', ramHistory); saveHistory('ram_ts', ramTimestamps);
-      drawChart('chart-ram', getWindow(ramHistory, RES_RANGE), '#0fcf8e', '#059669', 'RAM (%)');
+      const win = getWindowPair(ramHistory, ramTimestamps, RES_RANGE);
+      drawChart('chart-ram', win.data, '#0fcf8e', '#059669', 'RAM (%)', win.ts);
     }
   }
 
   function redrawAllCharts() {
-    drawChart('chart-dl',  getWindow(dlHistory,  CHART_RANGE), '#00d4ff', '#7c3aed', '↓ Download (Mbps)');
-    drawChart('chart-ul',  getWindow(ulHistory,  CHART_RANGE), '#10b981', '#059669', '↑ Upload (Mbps)');
-    drawChart('chart-cpu', getWindow(cpuHistory, RES_RANGE),   '#4f8ef7', '#7c5cfc', 'CPU (%)');
-    drawChart('chart-ram', getWindow(ramHistory, RES_RANGE),   '#0fcf8e', '#059669', 'RAM (%)');
+    const dlWin = getWindowPair(dlHistory, dlTimestamps, CHART_RANGE);
+    const ulWin = getWindowPair(ulHistory, ulTimestamps, CHART_RANGE);
+    const cpuWin = getWindowPair(cpuHistory, cpuTimestamps, RES_RANGE);
+    const ramWin = getWindowPair(ramHistory, ramTimestamps, RES_RANGE);
+    
+    drawChart('chart-dl',  dlWin.data,  '#00d4ff', '#7c3aed', '↓ Download (Mbps)', dlWin.ts);
+    drawChart('chart-ul',  ulWin.data,  '#10b981', '#059669', '↑ Upload (Mbps)', ulWin.ts);
+    drawChart('chart-cpu', cpuWin.data, '#4f8ef7', '#7c5cfc', 'CPU (%)', cpuWin.ts);
+    drawChart('chart-ram', ramWin.data, '#0fcf8e', '#059669', 'RAM (%)', ramWin.ts);
     if (combinedMode) drawCombinedChart();
   }
 
@@ -1922,7 +2402,7 @@
     CHART_RANGE = n;
     document.querySelectorAll('#tab-dashboard .card-header .chart-range-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    const labels = {12:'last 1m', 60:'last 5m', 720:'last 1h', 2880:'last 4h'};
+    const labels = {12:'last 1m', 60:'last 5m', 720:'last 1h', 2880:'last 4h', 17280:'last 24h'};
     const lbl = document.getElementById('net-range-label');
     if (lbl) lbl.textContent = labels[n] || ('last ' + n + 'pts');
     redrawAllCharts();
@@ -1934,8 +2414,8 @@
     const btns = document.querySelectorAll('[onclick^="setResRange"]');
     btns.forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    drawChart('chart-cpu', getWindow(cpuHistory, RES_RANGE), '#4f8ef7', '#7c5cfc', 'CPU (%)');
-    drawChart('chart-ram', getWindow(ramHistory, RES_RANGE), '#0fcf8e', '#059669', 'RAM (%)');
+    drawChart('chart-cpu', getWindow(cpuHistory, RES_RANGE), '#4f8ef7', '#7c5cfc', 'CPU (%)', getWindow(cpuTimestamps, RES_RANGE));
+    drawChart('chart-ram', getWindow(ramHistory, RES_RANGE), '#0fcf8e', '#059669', 'RAM (%)', getWindow(ramTimestamps, RES_RANGE));
     updateResStats();
   }
 
@@ -1956,46 +2436,86 @@
     canvas.width = W * dpr; canvas.height = H * dpr;
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
-    const dl = getWindow(dlHistory, CHART_RANGE);
-    const ul = getWindow(ulHistory, CHART_RANGE);
-    const n = Math.max(dl.length, ul.length, 1);
-    const max = Math.max(...dl, ...ul, 0.001);
+
+    const rawDl = getWindow(dlHistory, CHART_RANGE);
+    const rawUl = getWindow(ulHistory, CHART_RANGE);
+    const rawDlTs = getWindow(dlTimestamps, CHART_RANGE);
+    const rawUlTs = getWindow(ulTimestamps, CHART_RANGE);
+
     const pad = { t: 8, r: 8, b: 18, l: 42 };
     const gW = W - pad.l - pad.r;
     const gH = H - pad.t - pad.b;
     ctx.fillStyle = '#070910'; ctx.fillRect(0, 0, W, H);
-    // Grid
+
+    const MAX_VIS = Math.max(Math.ceil(gW / 2), 200);
+    let dl, dlTs, ul, ulTs;
+    if (rawDl.length > MAX_VIS) {
+      const sd = _lttb(rawDl, rawDlTs, MAX_VIS); dl = sd.data; dlTs = sd.timestamps;
+      const su = _lttb(rawUl, rawUlTs, MAX_VIS); ul = su.data; ulTs = su.timestamps;
+    } else {
+      dl = rawDl; dlTs = rawDlTs; ul = rawUl; ulTs = rawUlTs;
+    }
+
+    const n = Math.max(dl.length, ul.length, 1);
+    const max = Math.max(...dl, ...ul, 0.001);
+
     ctx.strokeStyle = 'rgba(30,34,53,0.9)'; ctx.lineWidth = 1;
     [0, 0.25, 0.5, 0.75, 1].forEach(f => {
       const y = Math.round(pad.t + gH * (1 - f)) + 0.5;
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + gW, y); ctx.stroke();
     });
-    const xOf = (i, len) => pad.l + (len > 1 ? (i / (len - 1)) * gW : gW / 2);
-    const yOf = v => pad.t + gH * (1 - v / max);
-    // Draw area
-    const drawArea = (data, color) => {
+
+    const hasTs = dlTs && dlTs.length > 1;
+    const tMin = hasTs ? Math.min(dlTs[0], ulTs[0]||dlTs[0]) : 0;
+    const tMax = hasTs ? Math.max(dlTs[dlTs.length-1], ulTs[ulTs.length-1]||dlTs[dlTs.length-1]) : n - 1;
+    const tSpan = tMax - tMin || 1;
+
+    const xOfArr = (arr, ts, i) => {
+      if (!hasTs || !ts || ts.length < 2) return pad.l + (arr.length > 1 ? (i / (arr.length - 1)) * gW : gW / 2);
+      return pad.l + ((ts[i] - tMin) / tSpan) * gW;
+    };
+    const yOf = v => pad.t + gH * (1 - Math.max(0, Math.min(max, v)) / max);
+
+    const drawArea = (data, ts, color) => {
       if (!data.length || !data.some(v => v > 0)) return;
       const len = data.length;
       const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + gH);
-      grad.addColorStop(0, color + '44'); grad.addColorStop(1, color + '05');
+      grad.addColorStop(0, color + '38'); grad.addColorStop(1, color + '04');
       ctx.beginPath();
-      data.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i,len), yOf(v)) : ctx.lineTo(xOf(i,len), yOf(v)); });
-      ctx.lineTo(xOf(len-1,len), pad.t + gH); ctx.lineTo(xOf(0,len), pad.t + gH); ctx.closePath();
+      data.forEach((v, i) => { i === 0 ? ctx.moveTo(xOfArr(data, ts, i), yOf(v)) : ctx.lineTo(xOfArr(data, ts, i), yOf(v)); });
+      ctx.lineTo(xOfArr(data, ts, len-1), pad.t + gH);
+      ctx.lineTo(xOfArr(data, ts, 0), pad.t + gH);
+      ctx.closePath();
       ctx.fillStyle = grad; ctx.fill();
       ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
-      data.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i,len), yOf(v)) : ctx.lineTo(xOf(i,len), yOf(v)); });
+      data.forEach((v, i) => { i === 0 ? ctx.moveTo(xOfArr(data, ts, i), yOf(v)) : ctx.lineTo(xOfArr(data, ts, i), yOf(v)); });
       ctx.stroke();
     };
-    drawArea(dl, '#00d4ff'); drawArea(ul, '#10b981');
-    // Y labels
+    drawArea(dl, dlTs, '#00d4ff');
+    drawArea(ul, ulTs, '#10b981');
+
     ctx.fillStyle = '#4a5568'; ctx.font = '8px monospace'; ctx.textAlign = 'right';
     [0, 0.5, 1].forEach(f => {
       const v = max * f;
-      const label = max >= 100 ? v.toFixed(0) : max >= 1 ? v.toFixed(1) : v.toFixed(2);
-      ctx.fillText(label, pad.l - 4, pad.t + gH * (1 - f) + 3);
+      const lbl = max >= 100 ? v.toFixed(0) : max >= 1 ? v.toFixed(1) : v.toFixed(2);
+      ctx.fillText(lbl, pad.l - 4, pad.t + gH * (1 - f) + 3);
     });
-    ctx.textAlign = 'left'; ctx.fillText('↓ cyan  ↑ green  Mbps', pad.l, H - 2);
-    ctx.textAlign = 'right'; ctx.fillText(_rangeStr(n), W - pad.r, H - 2);
+
+    if (hasTs && tSpan > 0) {
+      const numLabels = Math.max(2, Math.min(5, Math.floor(gW / 70)));
+      ctx.textAlign = 'left';
+      ctx.fillText(_fmtTime(tMin, tSpan), pad.l, H - 2);
+      for (let i = 1; i < numLabels - 1; i++) {
+        const frac = i / (numLabels - 1);
+        ctx.textAlign = 'center';
+        ctx.fillText(_fmtTime(tMin + tSpan * frac, tSpan), pad.l + gW * frac, H - 2);
+      }
+      ctx.textAlign = 'right';
+      ctx.fillText(_fmtTime(tMax, tSpan), W - pad.r, H - 2);
+    } else {
+      ctx.textAlign = 'left'; ctx.fillText('↓ cyan  ↑ green  Mbps', pad.l, H - 2);
+      ctx.textAlign = 'right'; ctx.fillText(_rangeStr(n), W - pad.r, H - 2);
+    }
   }
 
   function statsOf(arr) {
@@ -2032,6 +2552,30 @@
     setupChartHover('chart-ul',  'tooltip-ul',  ulHistory,  ulTimestamps,  '#10b981', 'Mbps');
     setupChartHover('chart-cpu', 'tooltip-cpu', cpuHistory, cpuTimestamps, '#4f8ef7', '%');
     setupChartHover('chart-ram', 'tooltip-ram', ramHistory, ramTimestamps, '#0fcf8e', '%');
+
+    // YAML editor cursor tracking
+    const yamlTa = document.getElementById('yaml-editor');
+    if (yamlTa) {
+      yamlTa.addEventListener('click', updateYamlCursor);
+      yamlTa.addEventListener('keyup', updateYamlCursor);
+      yamlTa.addEventListener('select', updateYamlCursor);
+      // Tab key inserts 2 spaces
+      yamlTa.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = yamlTa.selectionStart;
+          const end   = yamlTa.selectionEnd;
+          yamlTa.value = yamlTa.value.substring(0, start) + '  ' + yamlTa.value.substring(end);
+          yamlTa.selectionStart = yamlTa.selectionEnd = start + 2;
+          onYamlInput();
+        }
+      });
+    }
+
+    // Init diff buttons as hidden
+    [document.getElementById('yaml-diff-btn'), document.getElementById('yaml-diff-btn2')].forEach(b => {
+      if (b) b.style.display = 'none';
+    });
   });
   window.addEventListener('resize', redrawAllCharts);
 
@@ -2039,21 +2583,29 @@
   //  API CALLS
   // ═══════════════════════════════════════════════════════════
   async function api(path, opts={}) {
+    let r;
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (AUTH_TOKEN) headers['X-Auth-Token'] = AUTH_TOKEN;
-      const r = await fetch(API + path, { headers, ...opts });
-      if (r.status === 401) {
-        // Token rejected — show login again
-        logout();
-        throw new Error('Unauthorized');
-      }
-      const data = await r.json();
-      setApiStatus(true);
-      return data;
-    } catch (e) {
+      r = await fetch(API + path, { headers, ...opts });
+    } catch (networkErr) {
+      // True network failure — server unreachable
       setApiStatus(false);
-      throw e;
+      throw networkErr;
+    }
+    // Got a response — API is reachable regardless of status code
+    setApiStatus(true);
+    if (r.status === 401) {
+      // Token rejected — show login, but don't mark API as offline
+      logout();
+      throw new Error('Unauthorized');
+    }
+    // Parse JSON — wrap so callers get a clean error, not a misleading network error
+    try {
+      const data = await r.json();
+      return data;
+    } catch (jsonErr) {
+      throw new Error('Invalid JSON response from server: ' + jsonErr.message);
     }
   }
 
@@ -2062,21 +2614,838 @@
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  API STATUS
+  //  WEBSOCKET — real-time status & metrics push with HTTP polling fallback
   // ═══════════════════════════════════════════════════════════
+  let ws = null;
+  let wsReconnectTimer = null;
+  let wsBackoff = 1000;
+  let wsEnabled = false;
+  let wsDisabled = false;  // permanently disabled after backend rejects WS
+  let wsFailCount = 0;
+  const WS_MAX_FAILS = 2;  // give up quickly if backend doesn't support WebSocket
+  const WS_TIMEOUT = 8000;
+  let wsLastMsg = 0;
+
+  function setWsStatus(state, detail) {
+    const pill = document.getElementById('ws-pill');
+    const dot  = document.getElementById('ws-dot');
+    const lbl  = document.getElementById('ws-label');
+    if (!pill) return;
+    pill.style.display = 'flex';
+    pill.className = 'pill ws-' + state;
+    dot.style.background = state === 'on' ? 'var(--accent3)' : state === 'reconnecting' ? 'var(--accent4)' : state === 'off' ? 'var(--accent4)' : 'var(--danger)';
+    
+    if (state === 'on') {
+      lbl.textContent = 'Real-time';
+      pill.title = 'WebSocket connected: receiving live status & metrics updates';
+    } else if (state === 'reconnecting') {
+      lbl.textContent = detail || 'Reconnecting…';
+      pill.title = 'WebSocket reconnecting with exponential backoff';
+    } else {
+      lbl.textContent = 'Polling';
+      pill.title = wsDisabled 
+        ? 'HTTP polling active (WebSocket not supported by backend)' 
+        : 'WebSocket disconnected, using HTTP polling fallback';
+    }
+  }
+
+  function connectWS() {
+    if (wsDisabled) return;
+    if (ws && ws.readyState < 2) return;
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsBase = (API.startsWith('http') ? API.replace(/^http/, 'ws') : proto + '//' + location.host) + '/api/ws';
+    const wsUrl = AUTH_TOKEN ? wsBase + '?token=' + encodeURIComponent(AUTH_TOKEN) : wsBase;
+    try {
+      ws = new WebSocket(wsUrl);
+      // If backend can't upgrade (HTTP-only socat), connection will error fast
+      const connectTimeout = setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.CONNECTING) ws.close();
+      }, 4000);
+      ws.onopen = () => {
+        clearTimeout(connectTimeout);
+        wsFailCount = 0; wsBackoff = 1000; wsLastMsg = Date.now();
+        setWsStatus('on');
+        if (AUTH_TOKEN) ws.send(JSON.stringify({ type: 'auth', token: AUTH_TOKEN }));
+        // Subscribe to both status and metrics channels
+        ws.send(JSON.stringify({ type: 'subscribe', channel: 'status' }));
+        ws.send(JSON.stringify({ type: 'subscribe', channel: 'metrics' }));
+      };
+      ws.onmessage = e => {
+        wsLastMsg = Date.now();
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'status' && msg.data)  handleStatusData(msg.data);
+          if (msg.type === 'metrics' && msg.data) handleMetricsData(msg.data);
+          if (msg.type === 'error' && (msg.code === 401 || msg.msg === 'Unauthorized')) {
+            wsDisabled = true; ws.close(); setWsStatus('off');
+          }
+        } catch(wsErr) { console.warn('WS message parse error:', wsErr); }
+      };
+      ws.onerror = () => {
+        clearTimeout(connectTimeout);
+        wsFailCount++;
+        if (wsFailCount >= WS_MAX_FAILS) {
+          wsDisabled = true;
+          setWsStatus('off');
+          const pill = document.getElementById('ws-pill');
+          if (pill) pill.title = 'HTTP polling active (WebSocket not supported by this backend)';
+        } else {
+          setWsStatus('off');
+        }
+      };
+      ws.onclose = e => {
+        clearTimeout(connectTimeout);
+        if (e.code === 1008 || e.code === 4401) { wsDisabled = true; setWsStatus('off'); return; }
+        if (wsDisabled) return;
+        wsBackoff = Math.min(wsBackoff * 2, 30000);
+        const delaySec = Math.round(wsBackoff / 1000);
+        setWsStatus('reconnecting', `Reconnect in ${delaySec}s…`);
+        wsReconnectTimer = setTimeout(() => { connectWS(); }, wsBackoff);
+      };
+    } catch(e) { setWsStatus('off'); }
+  }
+
+  // Called by WS onmessage when server pushes a status frame
+  function handleStatusData(d) {
+    if (!d) return;
+    try {
+      // Reuse the same DOM-update logic as loadStatus
+      // Update global pill
+      const isActive = s => s === 'active' || s === 'activating';
+      const srv = d.server && isActive(d.server.state);
+      const cli = d.client && isActive(d.client.state);
+      const gpill = document.getElementById('global-pill');
+      if (gpill) {
+        let showGreen = false, pillLabel = 'Offline';
+        if (NODE_ROLE === 'server')      { showGreen = srv; pillLabel = srv ? 'Server Running' : 'Server Offline'; }
+        else if (NODE_ROLE === 'client') { showGreen = cli; pillLabel = cli ? 'Client Running' : 'Client Offline'; }
+        else {
+          if (srv && cli)      { showGreen = true; pillLabel = 'All Online'; }
+          else if (srv || cli) { showGreen = true; pillLabel = (srv ? 'Server' : 'Client') + ' Running'; }
+        }
+        gpill.className = showGreen ? 'pill pill-green' : 'pill pill-red';
+        gpill.innerHTML = `<div class="pdot ${showGreen?'pdot-g':'pdot-r'}"></div> ${pillLabel}`;
+      }
+      setApiStatus(true);
+      // Update system stats
+      if (d.system) {
+        const cpuPct = parseFloat(d.system.cpu_pct) || 0;
+        const ramPct = d.system.ram_total_mb > 0 ? Math.round(d.system.ram_used_mb / d.system.ram_total_mb * 100) : 0;
+        const cpu = document.getElementById('stat-cpu');   if (cpu) cpu.textContent = cpuPct;
+        const sys_cpu_val = document.getElementById('sys-cpu-val'); if (sys_cpu_val) sys_cpu_val.textContent = cpuPct + '%';
+        const sys_cpu_bar = document.getElementById('sys-cpu-bar'); if (sys_cpu_bar) sys_cpu_bar.style.width = Math.min(cpuPct,100) + '%';
+        const sys_ram_val = document.getElementById('sys-ram-val'); if (sys_ram_val) sys_ram_val.textContent = d.system.ram_used_mb + ' / ' + d.system.ram_total_mb + ' MB';
+        const sys_ram_bar = document.getElementById('sys-ram-bar'); if (sys_ram_bar) sys_ram_bar.style.width = ramPct + '%';
+        const last = document.getElementById('last-update'); if (last) last.textContent = 'Updated ' + new Date().toLocaleTimeString();
+        // Feed charts with actual data timestamp
+        const dataTs = d.system.snap_ts || Date.now();
+        updateChart('cpu', cpuPct, dataTs);
+        updateChart('ram', ramPct, dataTs);
+        // Network
+        const rx = d.system.rx_bytes, tx = d.system.tx_bytes, snapTs = d.system.snap_ts || 0;
+        if (prevRx > 0 && prevSnapTs > 0 && snapTs > prevSnapTs) {
+          const elapsedSec = (snapTs - prevSnapTs) / 1000;
+          const dlMbps = Math.max(0, (rx - prevRx) * 8 / 1e6 / elapsedSec);
+          const ulMbps = Math.max(0, (tx - prevTx) * 8 / 1e6 / elapsedSec);
+          const dlEl = document.getElementById('stat-dl'); if (dlEl) dlEl.textContent = dlMbps.toFixed(1);
+          const ulEl = document.getElementById('stat-ul'); if (ulEl) ulEl.textContent = ulMbps.toFixed(1);
+          updateChart('dl', dlMbps, snapTs);
+          updateChart('ul', ulMbps, snapTs);
+        }
+        prevRx = rx; prevTx = tx; prevSnapTs = snapTs;
+      }
+      if (d.server) {
+        const conns = document.getElementById('stat-conns'); if (conns) conns.textContent = d.server.connections || 0;
+      }
+
+      // Update svc-summary (dashboard) and services-cards (services tab) — same as loadStatus
+      const sumEl = document.getElementById('svc-summary');
+      if (sumEl && d.server && d.client) {
+        if (NODE_ROLE === 'server') {
+          sumEl.innerHTML = renderSvcRow('Server (Iran/relay) — this node', d.server, 'server') +
+                  renderSvcRowLocked('Client (Foreign/exit) — remote node');
+        } else if (NODE_ROLE === 'client') {
+          sumEl.innerHTML = renderSvcRowLocked('Server (Iran/relay) — remote node') +
+                  renderSvcRow('Client (Foreign/exit) — this node', d.client, 'client');
+        } else {
+          sumEl.innerHTML = renderSvcRow('Server (Iran/relay)', d.server, 'server') +
+                  renderSvcRow('Client (Foreign/exit)', d.client, 'client');
+        }
+      }
+      const cardsEl = document.getElementById('services-cards');
+      if (cardsEl && d.server && d.client) {
+        if (NODE_ROLE === 'server') {
+          cardsEl.innerHTML = renderSvcCard('DaggerConnect Server', d.server, 'server') +
+                  renderSvcCardLocked('DaggerConnect Client', 'client', 'This service runs on the CLIENT (Foreign) VPS');
+        } else if (NODE_ROLE === 'client') {
+          cardsEl.innerHTML = renderSvcCardLocked('DaggerConnect Server', 'server', 'This service runs on the SERVER (Iran) VPS') +
+                  renderSvcCard('DaggerConnect Client', d.client, 'client');
+        } else {
+          cardsEl.innerHTML = renderSvcCard('DaggerConnect Server', d.server, 'server') +
+                  renderSvcCard('DaggerConnect Client', d.client, 'client');
+        }
+      }
+    } catch(err) { console.warn('handleStatusData error:', err); }
+  }
+
+  // Handle metrics data push via WebSocket
+  function handleMetricsData(d) {
+    if (!d || !d.system) return;
+    try {
+      const sys = d.system;
+      const now = sys.snap_ts || Date.now();
+      const dt = (now - prevSnapTs) / 1000;
+      if (prevSnapTs > 0 && dt > 0 && dt < 30) {
+        const dlMbps = Math.max(0, ((sys.rx_bytes || 0) - prevRx) * 8 / 1e6 / dt);
+        const ulMbps = Math.max(0, ((sys.tx_bytes || 0) - prevTx) * 8 / 1e6 / dt);
+        const dlEl = document.getElementById('stat-dl'); if (dlEl) dlEl.textContent = dlMbps.toFixed(1);
+        const ulEl = document.getElementById('stat-ul'); if (ulEl) ulEl.textContent = ulMbps.toFixed(1);
+        updateChart('dl', dlMbps, now);
+        updateChart('ul', ulMbps, now);
+      }
+      prevRx = sys.rx_bytes || 0;
+      prevTx = sys.tx_bytes || 0;
+      prevSnapTs = now;
+
+      const dataTs = sys.snap_ts || Date.now();
+      updateChart('cpu', sys.cpu_pct || 0, dataTs);
+      const ramPct = sys.ram_total_mb > 0 ? Math.round((sys.ram_used_mb || 0) / sys.ram_total_mb * 100) : 0;
+      updateChart('ram', ramPct, dataTs);
+    } catch(err) {
+      console.warn('handleMetricsData error:', err);
+    }
+  }
+
+
+  // Start WS after login — token passed as query param since WS can't send custom headers
+  window.addEventListener('load', () => { setTimeout(connectWS, 2500); });
+
+  // ═══════════════════════════════════════════════════════════
+  //  YAML SYNTAX HIGHLIGHTING
+  // ═══════════════════════════════════════════════════════════
+  function highlightYaml(text) {
+    const lines = text.split('\n');
+    const lineNumEl = document.getElementById('yaml-line-nums');
+    const preEl     = document.getElementById('yaml-hl-pre');
+    if (!preEl) return;
+
+    // Line numbers
+    if (lineNumEl) {
+      lineNumEl.innerHTML = lines.map((_, i) =>
+        `<div style="padding:0 8px 0 0;height:1.6em">${i + 1}</div>`
+      ).join('');
+    }
+
+    // Track block-scalar state across lines (| or > indicator)
+    let inBlock = false;
+    let blockBaseIndent = -1;
+
+    const hl = lines.map(line => {
+      const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      // ── Inside a block scalar (|  or  >) ────────────────────
+      if (inBlock) {
+        if (line.trim() === '') return `<span class="hl-str">${esc(line)||'&nbsp;'}</span>`;
+        const indent = line.match(/^(\s*)/)[1].length;
+        if (indent > blockBaseIndent) {
+          return `<span class="hl-str">${esc(line)}</span>`;
+        }
+        inBlock = false; // indentation dropped — block ended, fall through
+      }
+
+      // ── Full-line comment ────────────────────────────────────
+      if (/^\s*#/.test(line))
+        return `<span class="hl-cmt">${esc(line)}</span>`;
+
+      // ── Document markers  --- / ... ─────────────────────────
+      if (/^\s*(---|\.\.\.)(\s|$)/.test(line))
+        return `<span class="hl-doc">${esc(line)}</span>`;
+
+      // ── List item   - … ─────────────────────────────────────
+      const listM = line.match(/^(\s*)(- )(.*)/);
+      if (listM) {
+        const indent = esc(listM[1]);
+        const dash   = `<span class="hl-list">- </span>`;
+        // Maybe the rest is a key:val inline
+        const kvInList = listM[3].match(/^([a-zA-Z_$][a-zA-Z0-9_\-$.]*)(\s*:\s*)(.*)/);
+        if (kvInList) {
+          const k   = `<span class="hl-key">${esc(kvInList[1])}</span>`;
+          const col = `<span class="hl-sep">: </span>`;
+          const { html, block } = hlVal(kvInList[3], listM[1].length);
+          if (block) { inBlock = true; blockBaseIndent = listM[1].length; }
+          return `${indent}${dash}${k}${col}${html}`;
+        }
+        const { html, block } = hlVal(listM[3], listM[1].length);
+        if (block) { inBlock = true; blockBaseIndent = listM[1].length; }
+        return `${indent}${dash}${html}`;
+      }
+
+      // ── Key : value ─────────────────────────────────────────
+      const kvM = line.match(/^(\s*)([a-zA-Z_$][a-zA-Z0-9_\-$.]*)\s*:(.*)/);
+      if (kvM) {
+        const indent = esc(kvM[1]);
+        const key    = `<span class="hl-key">${esc(kvM[2])}</span>`;
+        const colon  = `<span class="hl-sep">:</span>`;
+        const { html, block } = hlVal(kvM[3], kvM[1].length);
+        if (block) { inBlock = true; blockBaseIndent = kvM[1].length; }
+        return `${indent}${key}${colon}${html}`;
+      }
+
+      // ── Anchor / alias line ──────────────────────────────────
+      if (/^\s*[&*][a-zA-Z]/.test(line))
+        return `<span class="hl-anchor">${esc(line)}</span>`;
+
+      // ── Partial key — color word-only lines as keys-in-progress ──
+      // Without this, typing a key is invisible until : is added (transparent textarea bg)
+      const partialKeyM = line.match(/^(\s*)([a-zA-Z_$][a-zA-Z0-9_\-$.]*)\s*$/);
+      if (partialKeyM)
+        return `${esc(partialKeyM[1])}<span class="hl-key">${esc(partialKeyM[2])}</span>`;
+
+      return esc(line);
+    });
+
+    preEl.innerHTML = hl.join('\n');
+  }
+
+  /**
+   * Highlight an inline value string (everything after the colon or dash).
+   * Returns { html, block } where block=true means a | or > scalar follows.
+   */
+  function hlVal(raw, parentIndent) {
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (!raw && raw !== 0) return { html: '', block: false };
+    const trimmed = raw.trim();
+    if (trimmed === '') return { html: '', block: false };
+
+    // ── Split trailing inline comment  (not inside a quoted string) ──
+    // Only split at  " # " sequences that are not inside quotes
+    let valueStr = raw;
+    let commentHtml = '';
+    const cmtRx = /^((?:[^"'#]|"[^"]*"|'[^']*')*)(\s+#.+)$/;
+    const cmtM  = raw.match(cmtRx);
+    if (cmtM) {
+      valueStr  = cmtM[1];
+      commentHtml = `<span class="hl-cmt">${esc(cmtM[2])}</span>`;
+    }
+    const t = valueStr.trim();
+    const lead = valueStr.match(/^(\s?)/)?.[1] ?? ' '; // preserve one leading space
+
+    let html = '';
+
+    // Block scalar indicator  |  |+  |-  >  >+  >-
+    if (/^[|>][-+]?\s*$/.test(t)) {
+      return { html: ` <span class="hl-sep">${esc(t)}</span>${commentHtml}`, block: true };
+    }
+
+    // YAML type tags  !!str  !!int  !!float  !!bool  etc.
+    if (/^!!/.test(t)) {
+      const tagEnd = t.indexOf(' ');
+      const tag = tagEnd > 0 ? t.slice(0, tagEnd) : t;
+      const rest = tagEnd > 0 ? hlVal(lead + t.slice(tagEnd), 0).html : '';
+      html = `${lead}<span class="hl-tag">${esc(tag)}</span>${rest}`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Flow sequence  [a, b, c]
+    if (/^\[/.test(t)) {
+      const inner = t.replace(/^\[|\]$/g, '');
+      const items = splitFlowSeq(inner).map(i => hlVal(' ' + i.trim(), 0).html).join(`<span class="hl-sep">, </span>`);
+      html = `${lead}<span class="hl-bracket">[</span>${items}<span class="hl-bracket">]</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Flow mapping  { k: v }
+    if (/^\{/.test(t)) {
+      // Colour brackets distinctly, rest as bare
+      const inner = esc(t.slice(1, -1));
+      html = `${lead}<span class="hl-bracket">{</span><span class="hl-strbare">${inner}</span><span class="hl-bracket">}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Anchor or alias  &name  *name
+    if (/^[&*][a-zA-Z]/.test(t)) {
+      html = `${lead}<span class="hl-anchor">${esc(t)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // null / ~
+    if (/^(null|~)$/i.test(t)) {
+      html = `${lead}<span class="hl-null">${esc(t)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Boolean
+    if (/^(true|false|yes|no|on|off)$/i.test(t)) {
+      html = `${lead}<span class="hl-bool">${esc(t)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Number  (int, float, hex 0x…, octal 0o…, scientific, .inf, .nan)
+    if (/^[+-]?(0x[0-9a-fA-F]+|0o[0-7]+|\d+(\.\d*)?([eE][+-]?\d+)?|\.inf|\.nan)$/i.test(t)) {
+      html = `${lead}<span class="hl-num">${esc(t)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Quoted string  "…"  '…'  (including multi-word quoted)
+    if (/^"/.test(t) || /^'/.test(t)) {
+      html = `${lead}<span class="hl-str">${esc(t)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // IP address / CIDR  e.g. 0.0.0.0:443  127.0.0.1  10.0.0.0/8
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+|\/\d+)?$/.test(t)) {
+      html = `${lead}<span class="hl-num">${esc(t)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // host:port  or  domain:port  patterns (server addresses)
+    if (/^[a-zA-Z0-9._-]+:\d+$/.test(t)) {
+      const [host, port] = t.split(':');
+      html = `${lead}<span class="hl-strbare">${esc(host)}</span><span class="hl-sep">:</span><span class="hl-num">${esc(port)}</span>`;
+      return { html: html + commentHtml, block: false };
+    }
+
+    // Unquoted bare scalar
+    html = `${lead}<span class="hl-strbare">${esc(t)}</span>`;
+    return { html: html + commentHtml, block: false };
+  }
+
+  /** Split a flow-sequence inner string by commas (ignoring nested brackets) */
+  function splitFlowSeq(str) {
+    const parts = []; let cur = '', depth = 0;
+    for (const ch of str) {
+      if ((ch === '[' || ch === '{') ) depth++;
+      else if ((ch === ']' || ch === '}')) depth--;
+      else if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) parts.push(cur);
+    return parts;
+  }
+
+  function onYamlInput() {
+    const ta = document.getElementById('yaml-editor');
+    if (!ta) return;
+    highlightYaml(ta.value);
+    liveValidateYaml();
+    // Update cursor position
+    updateYamlCursor();
+    // Mark as dirty (preview or edited)
+    if (!_yamlIsPreview) {
+      const wasClean = !_yamlIsDirty;
+      _yamlIsDirty = true;
+      const diffBtns = [document.getElementById('yaml-diff-btn'), document.getElementById('yaml-diff-btn2')];
+      diffBtns.forEach(b => { if(b) b.style.display = ''; });
+      // Show "unsaved changes" banner on first edit
+      if (wasClean) {
+        const banner = document.getElementById('yaml-preview-banner');
+        const icon = document.getElementById('yaml-preview-icon');
+        const title  = document.getElementById('yaml-preview-title');
+        const sub    = document.getElementById('yaml-preview-subtitle');
+        if (banner) {
+          banner.style.background = 'rgba(240,75,75,.08)';
+          banner.style.border     = '1px solid rgba(240,75,75,.25)';
+          banner.style.display    = 'flex';
+        }
+        if (icon) icon.textContent = '✏️';
+        if (title) { 
+          title.textContent = 'Unsaved changes'; 
+          title.style.color = 'var(--danger)'; 
+        }
+        if (sub) sub.innerHTML = 'You have unsaved edits. Click <strong>Apply & Restart</strong> to save and apply, or <strong>Discard</strong> to reload from disk.';
+      }
+    }
+  }
+
+  function syncYamlScroll() {
+    const ta  = document.getElementById('yaml-editor');
+    const pre = document.getElementById('yaml-hl-pre');
+    const lns = document.getElementById('yaml-line-nums');
+    if (ta && pre) { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
+    if (ta && lns)   lns.scrollTop = ta.scrollTop;
+  }
+
+  function updateYamlCursor() {
+    const ta = document.getElementById('yaml-editor');
+    const el = document.getElementById('yaml-cursor-pos');
+    if (!ta || !el) return;
+    const before = ta.value.substring(0, ta.selectionStart);
+    const lines = before.split('\n');
+    el.textContent = `Ln ${lines.length}, Col ${lines[lines.length-1].length + 1}`;
+  }
+
+  let _yamlIsPreview = false;
+  let _yamlIsDirty   = false;
+
+  // ═══════════════════════════════════════════════════════════
+  //  YAML PREVIEW FLOW (improved — clear state management)
+  // ═══════════════════════════════════════════════════════════
+  function setYamlPreview(target, yaml, label) {
+    document.getElementById('yaml-target').value = target;
+    _yamlIsPreview = true;
+    _yamlIsDirty   = false;
+    switchTab('yaml', true);
+    const ta = document.getElementById('yaml-editor');
+    if (ta) { ta.value = yaml; highlightYaml(yaml); }
+    if (label) document.getElementById('yaml-file-label').textContent = label;
+
+    // Show preview banner with amber/warning styling
+    const banner = document.getElementById('yaml-preview-banner');
+    const icon = document.getElementById('yaml-preview-icon');
+    const title = document.getElementById('yaml-preview-title');
+    const sub = document.getElementById('yaml-preview-subtitle');
+    
+    if (banner) {
+      banner.style.display = 'flex';
+      banner.style.background = 'rgba(244,161,24,.08)';
+      banner.style.border = '1px solid rgba(244,161,24,.25)';
+    }
+    if (icon) icon.textContent = '👁';
+    if (title) {
+      title.textContent = `Preview — ${label || 'Generated config'}`;
+      title.style.color = 'var(--accent4)';
+    }
+    if (sub) sub.innerHTML = 'Review and edit the YAML below, then click <strong>Apply & Restart</strong> to apply, or <strong>Discard</strong> to revert to disk.';
+    
+    // Show diff buttons
+    const diffBtns = [document.getElementById('yaml-diff-btn'), document.getElementById('yaml-diff-btn2')];
+    diffBtns.forEach(b => { if(b) b.style.display = ''; });
+
+    showNotif('Config preview loaded — review then click Apply & Restart', '👁');
+  }
+
+  function discardYamlPreview() {
+    _yamlIsPreview = false;
+    _yamlIsDirty   = false;
+    const banner = document.getElementById('yaml-preview-banner');
+    if (banner) {
+      banner.style.display    = 'none';
+      // Reset banner to wizard/preview style for next use
+      banner.style.background = '';
+      banner.style.border     = '';
+    }
+    const title = document.getElementById('yaml-preview-title');
+    const sub   = document.getElementById('yaml-preview-subtitle');
+    if (title) { title.style.color = ''; }
+    if (sub)   sub.innerHTML = 'Review and edit the YAML below, then click <strong>Save & Restart</strong> to apply, or <strong>Discard</strong> to revert to disk.';
+    const diffBtns = [document.getElementById('yaml-diff-btn'), document.getElementById('yaml-diff-btn2')];
+    diffBtns.forEach(b => { if(b) b.style.display = 'none'; });
+    // Reload from disk
+    loadConfig(document.getElementById('yaml-target').value);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  YAML DIFF
+  // ═══════════════════════════════════════════════════════════
+  async function showYamlDiff() {
+    const target  = (document.getElementById('yaml-target') || {}).value || 'server';
+    const editorEl = document.getElementById('yaml-editor');
+    const editorContent = editorEl ? editorEl.value : '';
+    const modal   = document.getElementById('yaml-diff-modal');
+    const output  = document.getElementById('diff-output');
+    const loading = document.getElementById('diff-loading');
+    const statsEl = document.getElementById('diff-stats');
+
+    if (!modal || !output || !loading) return;
+    modal.classList.add('open');
+    if (loading) loading.style.display = 'block';
+    if (output)  output.style.display  = 'none';
+
+    let d;
+    try {
+      d = await post('/api/config/diff', { target, content: editorContent });
+    } catch(fetchErr) {
+      if (loading) loading.style.display = 'none';
+      if (output) {
+        output.innerHTML = `<div class="diff-line diff-del" style="padding:16px">Network error: ${String(fetchErr.message || fetchErr)}</div>`;
+        output.style.display = 'block';
+      }
+      return;
+    }
+
+    if (loading) loading.style.display = 'none';
+
+    if (!d || !d.ok) {
+      output.innerHTML = `<div class="diff-line diff-del" style="padding:16px">Error: ${String((d && d.msg) || 'diff failed')}</div>`;
+      output.style.display = 'block';
+      return;
+    }
+
+    if (!d.has_diff) {
+      output.innerHTML = `<div class="diff-line diff-ctx" style="padding:20px;text-align:center;color:var(--accent3)">✓ No changes — config on disk matches editor.</div>`;
+      output.style.display = 'block';
+      return;
+    }
+
+    // Stats bar
+    const ch = d.changes || {};
+    if (statsEl) {
+      statsEl.innerHTML =
+        `<span style="color:var(--accent3)">+${ch.added||0} lines added</span>  ` +
+        `<span style="color:var(--danger)">−${ch.removed||0} removed</span>  ` +
+        `<span style="color:var(--accent4)">~${ch.changed||0} changed</span>  ` +
+        `<span style="color:var(--text2);margin-left:auto">${d.current_lines||0} → ${d.proposed_lines||0} lines</span>`;
+    }
+
+    // Render diff lines
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const lines = Array.isArray(d.diff_lines) ? d.diff_lines : [];
+    const html = lines.map(rawLine => {
+      const line = String(rawLine);  // ensure string even if API returns unexpected type
+      if (line.startsWith('---') || line.startsWith('+++'))
+        return `<div class="diff-line diff-hunk">${esc(line)}</div>`;
+      if (line.startsWith('@@'))
+        return `<div class="diff-line diff-hunk" style="background:rgba(79,142,247,.08)">${esc(line)}</div>`;
+      if (line.startsWith('+'))
+        return `<div class="diff-line diff-add">${esc(line)}</div>`;
+      if (line.startsWith('-'))
+        return `<div class="diff-line diff-del">${esc(line)}</div>`;
+      return `<div class="diff-line diff-ctx">${esc(line)}</div>`;
+    }).join('');
+
+    output.innerHTML = html || '<div class="diff-line diff-ctx" style="padding:16px;text-align:center">No diff content returned</div>';
+    output.style.display = 'block';
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  CONNECTIONS — filter and auto-refresh
+  // ═══════════════════════════════════════════════════════════
+  let _connData = [];
+  let _connAutoRefreshTimer = null;
+
+  function filterConnections() {
+    const search    = (document.getElementById('conn-search')?.value || '').toLowerCase();
+    const stateF    = (document.getElementById('conn-state-filter')?.value || '').toLowerCase();
+    const portF     = document.getElementById('conn-port-filter')?.value || '';
+    const tbody     = document.getElementById('conn-table');
+    const countEl   = document.getElementById('conn-filter-count');
+    if (!tbody) return;
+
+    const filtered = _connData.filter(c => {
+      if (search && !JSON.stringify(c).toLowerCase().includes(search)) return false;
+      if (stateF && !c.state.toLowerCase().includes(stateF)) return false;
+      if (portF && String(c.port) !== portF) return false;
+      return true;
+    });
+
+    if (countEl) countEl.textContent = filtered.length === _connData.length ? '' : `${filtered.length} / ${_connData.length} shown`;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-mono text-sm" style="padding:14px">No connections match filter.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(c => {
+      const stateClass = c.state === 'ESTAB' ? 'b-green' :
+                         c.state === 'TIME-WAIT' ? 'b-amber' : 'b-cyan';
+      const geo = c._geo || {};
+      const countryBadge = geo.country && geo.country !== 'Unknown'
+        ? `<span title="${escHtml(geo.city ? geo.city+', '+geo.country : geo.country)}">${escHtml(geo.country_iso||geo.country)}</span>`
+        : '<span class="text-muted">—</span>';
+      const asnBadge = geo.asn ? `<span class="text-mono" style="font-size:9px">${escHtml(geo.asn)}<br>${escHtml(geo.org||'').substring(0,24)}</span>` : '<span class="text-muted">—</span>';
+      return `<tr>
+        <td class="text-mono" style="font-size:11px">${escHtml(c.local)}</td>
+        <td class="text-mono" style="font-size:11px">${escHtml(c.remote)}</td>
+        <td><span class="badge ${stateClass}">${escHtml(c.state)}</span></td>
+        <td class="text-mono" style="font-size:11px">${c.port}</td>
+        <td style="font-size:11px">${countryBadge}</td>
+        <td style="font-size:10px">${asnBadge}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Override loadConnections to store raw data and populate filter options
+  const _origLoadConnections = typeof loadConnections === 'function' ? loadConnections : null;
+
+  async function resolveConnectionsGeoIP() {
+    if (!_connData.length) { showNotif('Load connections first', '⚠️'); return; }
+    const btn = document.getElementById('geoip-btn');
+    if (btn) btn.textContent = '⏳ Resolving…';
+    try {
+      const ips = [...new Set(_connData.map(c => {
+        const remote = c.remote || '';
+        const ip = remote.includes('[') ? remote.match(/\[([^\]]+)\]/)?.[1] : remote.split(':')[0];
+        return ip;
+      }).filter(Boolean))];
+      const d = await post('/api/geoip/bulk', { ips });
+      if (d.ok && d.results) {
+        _connData = _connData.map(c => {
+          const remote = c.remote || '';
+          const ip = remote.includes('[') ? remote.match(/\[([^\]]+)\]/)?.[1] : remote.split(':')[0];
+          c._geo = ip ? (d.results[ip] || {}) : {};
+          return c;
+        });
+        filterConnections();
+        showNotif('GeoIP resolved for ' + ips.length + ' IPs', '🌍');
+      } else {
+        showNotif('GeoIP not available (install geoip2 + mmdb files)', '⚠️');
+      }
+    } catch(e) {
+      showNotif('GeoIP lookup failed', '❌');
+    } finally {
+      if (btn) btn.textContent = '🌍 Resolve GeoIP';
+    }
+  }
+
+  function toggleConnAutoRefresh() {
+    const btn = document.getElementById('conn-autorefresh-btn');
+    if (_connAutoRefreshTimer) {
+      clearInterval(_connAutoRefreshTimer);
+      _connAutoRefreshTimer = null;
+      if (btn) btn.textContent = '▶ Auto-refresh (10s)';
+    } else {
+      loadConnections();
+      _connAutoRefreshTimer = setInterval(loadConnections, 10000);
+      if (btn) btn.textContent = '⏸ Stop auto-refresh';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  30-DAY METRICS HISTORY MODAL
+  // ═══════════════════════════════════════════════════════════
+  let _currentMetricsPeriod = '1h';
+
+  function openMetricsHistory() {
+    document.getElementById('metrics-history-modal').classList.add('open');
+    loadMetricsPeriod('1h', document.querySelector('.metrics-period-tab'));
+  }
+
+  async function loadMetricsPeriod(period, tabEl) {
+    _currentMetricsPeriod = period;
+    document.querySelectorAll('.metrics-period-tab').forEach(t => t.classList.remove('active'));
+    if (tabEl) tabEl.classList.add('active');
+
+    const labelEl = document.getElementById('metrics-period-label');
+    const labels  = {'1h':'Last hour','6h':'Last 6 hours','24h':'Last 24 hours','7d':'Last 7 days','30d':'Last 30 days'};
+    if (labelEl) labelEl.textContent = labels[period] || period;
+
+    const gridEl   = document.getElementById('metrics-summary-grid');
+    const noDataEl = document.getElementById('metrics-no-data');
+    const chartsEl = document.getElementById('metrics-charts-grid');
+    const loadingOv = document.getElementById('metrics-loading-overlay');
+    
+    if (loadingOv) { loadingOv.style.display = 'flex'; }
+    if (gridEl) gridEl.innerHTML = '';
+
+    const periodMap = {
+      '1h':  { range: 'raw',    days: 0.042, points: 720 },
+      '6h':  { range: 'raw',    days: 0.25,  points: 4320 },
+      '24h': { range: 'hourly', days: 1,     points: 24 },
+      '7d':  { range: 'hourly', days: 7,     points: 168 },
+      '30d': { range: 'daily',  days: 30,    points: 30 },
+    };
+    const p = periodMap[period] || periodMap['1h'];
+    const from = Date.now() - p.days * 86400000;
+
+    try {
+      const [histData, summData] = await Promise.all([
+        api(`/api/metrics/history?range=${p.range}&points=${p.points}&from=${Math.round(from)}`),
+        api('/api/metrics/summary'),
+      ]);
+
+      let pts = histData.points || [];
+      let actualRange = p.range;
+
+      if (pts.length < 2 && p.range !== 'raw') {
+        const rawFrom = Date.now() - Math.min(p.days, 1) * 86400000;
+        try {
+          const fb = await api(`/api/metrics/history?range=raw&points=17280&from=${Math.round(rawFrom)}`);
+          if (fb.ok && fb.points && fb.points.length > 1) {
+            pts = fb.points;
+            actualRange = 'raw';
+          }
+        } catch(_) {}
+      }
+
+      if (loadingOv) { loadingOv.style.display = 'none'; }
+
+      if (!pts.length) {
+        if (noDataEl) noDataEl.style.display = 'block';
+        if (chartsEl) chartsEl.style.display = 'none';
+        if (gridEl) gridEl.innerHTML = '';
+        return;
+      }
+      if (noDataEl) noDataEl.style.display = 'none';
+      if (chartsEl) chartsEl.style.display = '';
+
+      const sum = summData.summary || {};
+      const pKey = period === '1h' ? '1h' : period === '6h' ? '1h' : period === '24h' ? '24h' : period === '7d' ? '7d' : '30d';
+      const s = sum[pKey] || {};
+      if (gridEl) {
+        gridEl.innerHTML = [
+          { label: 'Avg CPU', val: s.cpu_avg !== undefined ? s.cpu_avg + '%' : '—', sub: 'Peak: ' + (s.cpu_max || '—') + '%' },
+          { label: 'Avg RAM', val: s.ram_avg !== undefined ? s.ram_avg + '%' : '—', sub: 'Peak: ' + (s.ram_max || '—') + '%' },
+          { label: 'Avg Conns', val: s.conns_avg !== undefined ? Math.round(s.conns_avg) : '—', sub: 'Peak: ' + (s.conns_max || '—') },
+          { label: 'Samples', val: s.samples !== undefined ? s.samples.toLocaleString() : '—', sub: labels[period] || period },
+        ].map(cell => `
+          <div class="metrics-summary-cell">
+            <div class="metrics-summary-period">${cell.label}</div>
+            <div class="metrics-summary-val">${cell.val}</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:4px;font-family:'Geist Mono',monospace">${cell.sub}</div>
+          </div>
+        `).join('');
+      }
+
+      const getCpuKey   = pt => pt.cpu_avg !== undefined ? pt.cpu_avg : (pt.cpu || 0);
+      const getRamKey   = pt => pt.ram_avg !== undefined ? pt.ram_avg : (pt.ram || 0);
+      const getConnsKey = pt => pt.conns_avg !== undefined ? pt.conns_avg : (pt.conns || 0);
+
+      const cpuArr   = pts.map(getCpuKey);
+      const ramArr   = pts.map(getRamKey);
+      const connsArr = pts.map(getConnsKey);
+      const tsArr    = pts.map(pt => pt.ts || pt.hour_ts || pt.day_ts || 0);
+
+      let rxArr;
+      if (actualRange === 'raw') {
+        rxArr = pts.map((pt, i) => {
+          if (i === 0) return 0;
+          const prev = pts[i - 1];
+          const dt = (pt.ts - prev.ts) / 1000;
+          if (dt <= 0 || dt > 60) return 0;
+          return Math.max(0, ((pt.rx || 0) - (prev.rx || 0)) / dt / 125000);
+        });
+      } else {
+        rxArr = pts.map(pt =>
+          (pt.rx_max !== undefined && pt.rx_min !== undefined)
+            ? Math.max(0, pt.rx_max - pt.rx_min) / 1e6
+            : 0
+        );
+      }
+
+      drawChart('mh-cpu',   cpuArr,   '#4f8ef7', '#7c5cfc', `CPU % (${period})`,   tsArr);
+      drawChart('mh-ram',   ramArr,   '#0fcf8e', '#059669', `RAM % (${period})`,   tsArr);
+      drawChart('mh-rx',    rxArr,    '#00d4ff', '#7c3aed', `Network (${period})`,  tsArr);
+      drawChart('mh-conns', connsArr, '#f4a118', '#f97316', `Connections (${period})`, tsArr);
+
+    } catch(e) {
+      if (loadingOv) { loadingOv.style.display = 'none'; }
+      console.error('Metrics load error:', e);
+      if (gridEl) gridEl.innerHTML = '<div class="text-muted text-mono text-xs" style="grid-column:1/-1;padding:8px">Error: ' + e.message + '</div>';
+    }
+  }
+
+
+  let _apiFailCount = 0;  // debounce: only show banner after 2 consecutive failures
+
   function setApiStatus(ok) {
-    apiOnline = ok;
     const dot = document.getElementById('api-dot');
     const lbl = document.getElementById('api-label');
     const err = document.getElementById('err-banner');
     if (ok) {
+      _apiFailCount = 0;
+      apiOnline = true;
       dot.classList.add('ok');
       lbl.textContent = 'API: online';
       err.classList.remove('show');
     } else {
-      dot.classList.remove('ok');
-      lbl.textContent = 'API: offline';
-      err.classList.add('show');
+      _apiFailCount++;
+      // Only show the error banner after 2 consecutive failures to avoid flicker
+      if (_apiFailCount >= 2) {
+        apiOnline = false;
+        dot.classList.remove('ok');
+        lbl.textContent = 'API: offline';
+        err.classList.add('show');
+      }
     }
   }
 
@@ -2084,24 +3453,39 @@
   //  STATUS POLLING
   // ═══════════════════════════════════════════════════════════
   async function loadStatus() {
+    // Skip HTTP poll when WebSocket is live and delivering fresh data
+    if (ws && ws.readyState === WebSocket.OPEN && Date.now() - wsLastMsg < 8000) return;
     try {
       const d = await api('/api/status');
 
-      // Global pill
-      const srv = d.server.state === 'active';
-      const cli = d.client.state === 'active';
+      // Global pill — role-aware so a single-role node doesn't show "Offline"
+      // systemctl is-active can return: active, inactive, activating, deactivating, failed, unknown
+      const isActive = s => s === 'active' || s === 'activating';
+      const srv = isActive(d.server.state);
+      const cli = isActive(d.client.state);
       const gpill = document.getElementById('global-pill');
-      if (srv && cli) {
+
+      // On a known role node, only check the relevant service
+      let showGreen = false, pillLabel = 'Offline';
+      if (NODE_ROLE === 'server') {
+        showGreen = srv;
+        pillLabel = srv ? 'Server Running' : 'Server Offline';
+      } else if (NODE_ROLE === 'client') {
+        showGreen = cli;
+        pillLabel = cli ? 'Client Running' : 'Client Offline';
+      } else {
+        // Unknown role — check both
+        if (srv && cli)     { showGreen = true;  pillLabel = 'All Online'; }
+        else if (srv || cli){ showGreen = true;  pillLabel = (srv ? 'Server' : 'Client') + ' Running'; }
+        else                { showGreen = false; pillLabel = 'Offline'; }
+      }
+
+      if (showGreen) {
         gpill.className = 'pill pill-green';
-        gpill.innerHTML = '<div class="pdot pdot-g"></div> All Online';
-      } else if (srv || cli) {
-        // One service running — on a single-role node this is the normal running state
-        const activeOne = srv ? 'Server' : 'Client';
-        gpill.className = 'pill pill-green';
-        gpill.innerHTML = `<div class="pdot pdot-g"></div> ${activeOne} Running`;
+        gpill.innerHTML = `<div class="pdot pdot-g"></div> ${pillLabel}`;
       } else {
         gpill.className = 'pill pill-red';
-        gpill.innerHTML = '<div class="pdot pdot-r"></div> Offline';
+        gpill.innerHTML = `<div class="pdot pdot-r"></div> ${pillLabel}`;
       }
 
       // Stats cards
@@ -2129,15 +3513,35 @@
       const srvCpu = parseFloat(d.server.cpu) || 0;
 
       document.getElementById('sys-cpu-val').textContent = cpuPct + '%';
+      
+      // Update server process metrics (fixed)
+      const srvCpuEl = document.getElementById('srv-cpu-val');
+      const srvCpuBar = document.getElementById('srv-cpu-bar');
+      if (srvCpuEl && d && d.server) {
+        const srv = d.server;
+        if (srv.pid > 0) {
+          const srvCpuVal = parseFloat(srv.cpu || 0);
+          const srvMemVal = parseInt(srv.mem_mb || 0);
+          if (srvCpuVal > 0 || srvMemVal > 0) {
+            srvCpuEl.textContent = srvCpuVal.toFixed(1) + '% · ' + srvMemVal + ' MB';
+            if (srvCpuBar) srvCpuBar.style.width = Math.min(100, srvCpuVal) + '%';
+          } else {
+            srvCpuEl.textContent = 'Running (0%)';
+            if (srvCpuBar) srvCpuBar.style.width = '0%';
+          }
+        } else {
+          srvCpuEl.textContent = 'Offline';
+          if (srvCpuBar) srvCpuBar.style.width = '0%';
+        }
+      }
       document.getElementById('sys-cpu-bar').style.width = Math.min(cpuPct, 100) + '%';
       document.getElementById('sys-ram-val').textContent = d.system.ram_used_mb + ' / ' + d.system.ram_total_mb + ' MB';
       document.getElementById('sys-ram-bar').style.width = ramPct + '%';
-      document.getElementById('srv-cpu-val').textContent = 'Server ' + srvCpu + '% · ' + d.server.mem_mb + ' MB';
-      document.getElementById('srv-cpu-bar').style.width = Math.min(srvCpu * 4, 100) + '%';
 
-      // Update CPU/RAM charts
-      updateChart('cpu', cpuPct);
-      updateChart('ram', ramPct);
+      // Update CPU/RAM charts with actual data timestamp
+      const dataTs = d.system.snap_ts || Date.now();
+      updateChart('cpu', cpuPct, dataTs);
+      updateChart('ram', ramPct, dataTs);
       setTrend('stat-cpu-trend', cpuPct, cpuHistory);
 
       // Services summary (dashboard) — show both but mark remote one clearly
@@ -2170,6 +3574,7 @@
           cardsEl.innerHTML = renderSvcCard('DaggerConnect Server', d.server, 'server') +
                   renderSvcCard('DaggerConnect Client', d.client, 'client');
         }
+        // Load restart counters asynchronously (non-blocking)
       }
 
       // Network speed — use snap_ts from API so elapsed time is precise
@@ -2183,8 +3588,8 @@
         const ulMbps = Math.max(0, (tx - prevTx) * 8 / 1e6 / elapsedSec);
         document.getElementById('stat-dl').textContent = dlMbps.toFixed(1);
         document.getElementById('stat-ul').textContent = ulMbps.toFixed(1);
-        updateChart('dl', dlMbps);
-        updateChart('ul', ulMbps);
+        updateChart('dl', dlMbps, snapTs);
+        updateChart('ul', ulMbps, snapTs);
         setTrend('stat-dl-trend', dlMbps, dlHistory);
         setTrend('stat-ul-trend', ulMbps, ulHistory);
       }
@@ -2194,6 +3599,25 @@
 
     } catch(e) {
       console.warn('Status poll failed:', e);
+    }
+  }
+
+  async function checkBandwidthAlarm() {
+    try {
+      const d = await api('/api/quota/config');
+      const alarm = d.alarm || (d.config && d.config.alarm);
+      const alarmEl = document.getElementById('bandwidth-alarm-banner');
+      if (!alarmEl) return;
+      
+      if (alarm && alarm.type === 'bandwidth') {
+        alarmEl.style.display = 'flex';
+        const alarmMsg = `Bandwidth usage at ${alarm.value}% of monthly limit (${alarm.used_gb} GB / ${alarm.limit_gb} GB)`;
+        const textEl = document.getElementById('bandwidth-alarm-text');
+        if (textEl) textEl.innerHTML = `<strong>Quota Alarm:</strong> ${alarmMsg}`;
+      } else {
+        alarmEl.style.display = 'none';
+      }
+    } catch(e) {
     }
   }
 
@@ -2212,11 +3636,26 @@
   </div>`;
   }
 
+  function fmtUptime(svc) {
+    if (svc.uptime_human) return svc.uptime_human;
+    if (svc.uptime) return svc.uptime;
+    let secs = null;
+    if (svc.uptime_s) secs = svc.uptime_s;
+    else if (svc.started_at) secs = Math.floor((Date.now() - svc.started_at * 1000) / 1000);
+    else if (svc.start_time) secs = Math.floor((Date.now() - svc.start_time * 1000) / 1000);
+    if (secs === null || secs < 0) return '—';
+    const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
   function renderSvcCard(name, svc, id) {
     const on = svc.state === 'active';
-    const cpuW = Math.min((parseFloat(svc.cpu) || 0) * 4, 100);
+    const cpuW = Math.min((parseFloat(svc.cpu) || 0), 100);
     const memW = Math.min((svc.mem_mb || 0) / 512 * 100, 100);
-    return `<div class="card mb16">
+    return `<div class="card mb16" id="svc-card-${id}">
     <div class="card-header">
       <span>${id === 'server' ? '🖥️' : '💻'}</span>
       <span class="card-title">${name}</span>
@@ -2241,15 +3680,19 @@
       </div>
       <div class="flex" style="flex-wrap:wrap;gap:6px;margin-top:4px">
         <span class="badge b-cyan">PID: ${svc.pid || '—'}</span>
-        <span class="badge b-amber">Uptime: ${svc.uptime || '—'}</span>
+        <span class="badge b-amber">Uptime: ${fmtUptime(svc)}</span>
         ${id === 'server' ? `<span class="badge b-green">Connections: ${svc.connections}</span>` : ''}
         <span class="badge ${on ? 'b-green' : 'b-red'}">${svc.state || 'unknown'}</span>
+  
       </div>
+
     </div>
     <div class="card-footer">
+
       <button class="btn btn-ghost mla" onclick="switchTab('logs');document.getElementById('log-svc').value='${id}';fetchLogs()">View Logs</button>
       <button class="btn btn-ghost" onclick="switchTab('yaml');document.getElementById('yaml-target').value='${id}';loadConfig('${id}')">Edit Config</button>
       <button class="btn btn-ghost" onclick="svcAction('${id}','enable')">Enable Autostart</button>
+      <button class="btn btn-ghost" onclick="scheduleRestart('${id}')">⏰ Schedule Restart</button>
     </div>
   </div>`;
   }
@@ -2286,9 +3729,27 @@
       showNotif(`${action}ing ${svc}…`, '⏳');
       const d = await post(`/api/service/${action}`, { service: svc });
       showNotif(d.msg || `${action} sent`, d.ok ? '✅' : '❌');
-      setTimeout(loadStatus, 1200);
+      if (d.ok) {
+        // Poll status until state matches expected outcome — systemd needs time to settle
+        const expectedState = (action === 'stop') ? 'inactive' : 'active';
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          await loadStatus();
+          // Read the latest rendered state from the pill to know if settled
+          const pill = document.getElementById('global-pill');
+          const pillText = pill ? pill.textContent : '';
+          const settled = action === 'stop'
+            ? (pillText.includes('Offline') || pillText.includes('Stopped'))
+            : (pillText.includes('Running') || pillText.includes('Online'));
+          if (settled || attempts >= 8) clearInterval(poll);
+        }, 1500);
+      } else {
+        setTimeout(loadStatus, 1000);
+      }
     } catch(e) {
-      showNotif('API unreachable', '❌');
+      showNotif('API error: ' + (e.message || e), '❌');
+      setTimeout(loadStatus, 1000);
     }
   }
 
@@ -2424,23 +3885,29 @@
       if (d.ok) {
         // decode escaped newlines back
         const content = d.content.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-        document.getElementById('yaml-editor').value = content;
+        const ta = document.getElementById('yaml-editor');
+        if (ta) ta.value = content;
         document.getElementById('yaml-file-label').textContent = d.file;
+        highlightYaml(content);
+        // Clear preview state when loading from disk
+        _yamlIsPreview = false;
+        _yamlIsDirty   = false;
+        const banner = document.getElementById('yaml-preview-banner');
+        if (banner) banner.style.display = 'none';
+        const diffBtns = [document.getElementById('yaml-diff-btn'), document.getElementById('yaml-diff-btn2')];
+        diffBtns.forEach(b => { if(b) b.style.display = 'none'; });
       } else {
-        document.getElementById('yaml-editor').value = `# ${d.msg}`;
+        const ta = document.getElementById('yaml-editor');
+        if (ta) ta.value = `# ${d.msg}`;
+        highlightYaml(`# ${d.msg}`);
       }
     } catch(e) {
-      document.getElementById('yaml-editor').value = '# Cannot reach API';
+      const ta = document.getElementById('yaml-editor');
+      if (ta) { ta.value = '# Cannot reach API'; highlightYaml('# Cannot reach API'); }
     }
   }
 
-  // Helper: switch to yaml tab and set content without triggering loadConfig
-  function setYamlPreview(target, yaml, label) {
-    document.getElementById('yaml-target').value = target;
-    switchTab('yaml', true);
-    document.getElementById('yaml-editor').value = yaml;
-    if (label) document.getElementById('yaml-file-label').textContent = label;
-  }
+  // Remove the old setYamlPreview (replaced by new version added above)
 
   async function loadTemplate(transport) {
     try {
@@ -3097,38 +4564,36 @@
   async function loadConnections() {
     try {
       const d = await api('/api/connections');
-      const tb = document.getElementById('conn-table');
       const badge = document.getElementById('conn-count-badge');
 
       if (!d.connections || d.connections.length === 0) {
-        tb.innerHTML = `<tr><td colspan="4" class="text-muted text-mono text-sm" style="padding:14px">No active connections (role: ${d.role || 'unknown'}${d.ports && d.ports.length ? ', ports: ' + d.ports.join(', ') : ''})</td></tr>`;
+        _connData = [];
+        const tb = document.getElementById('conn-table');
+        if (tb) tb.innerHTML = `<tr><td colspan="4" class="text-muted text-mono text-sm" style="padding:14px">No active connections (role: ${d.role || 'unknown'}${d.ports && d.ports.length ? ', ports: ' + d.ports.join(', ') : ''})</td></tr>`;
         if (badge) { badge.textContent = '0'; badge.style.display = 'none'; }
         return;
       }
 
-      // Group by port
-      const byPort = {};
-      d.connections.forEach(c => {
-        const p = c.port || '?';
-        if (!byPort[p]) byPort[p] = [];
-        byPort[p].push(c);
-      });
+      // Store raw data for filtering
+      _connData = d.connections;
 
-      let html = '';
-      Object.keys(byPort).sort().forEach(port => {
-        html += `<tr style="background:var(--bg3)"><td colspan="4" class="text-xs" style="padding:5px 12px;color:var(--text3)">Port ${port} — ${byPort[port].length} connection(s)</td></tr>`;
-        byPort[port].forEach(c => {
-          const stateCls = c.state === 'ESTAB' ? 'b-green' : c.state && c.state.includes('TIME') ? 'b-amber' : 'b-red';
-          html += `<tr>
-          <td class="text-mono text-sm" style="cursor:pointer" title="Click to copy" onclick="navigator.clipboard?.writeText('${escHtml(c.local)}')">${escHtml(c.local)}</td>
-          <td class="text-mono text-sm" style="cursor:pointer" title="Click to copy" onclick="navigator.clipboard?.writeText('${escHtml(c.remote)}')">${escHtml(c.remote)}</td>
-          <td><span class="badge ${stateCls}">${escHtml(c.state || 'ESTAB')}</span></td>
-          <td class="text-mono text-xs text-muted">${port}</td>
-        </tr>`;
+      // Populate port filter dropdown
+      const portSel = document.getElementById('conn-port-filter');
+      if (portSel) {
+        const existingPorts = Array.from(portSel.options).slice(1).map(o => o.value);
+        const newPorts = [...new Set(d.connections.map(c => String(c.port)))];
+        newPorts.forEach(p => {
+          if (!existingPorts.includes(p)) {
+            const opt = document.createElement('option');
+            opt.value = p; opt.textContent = `Port ${p}`;
+            portSel.appendChild(opt);
+          }
         });
-      });
+      }
 
-      tb.innerHTML = html;
+      // Apply current filter
+      filterConnections();
+
       const total = d.connections.length;
       if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
 
@@ -3836,30 +5301,46 @@
     const tabCli   = document.getElementById('tab-client');
     const tabPorts = document.getElementById('tab-ports');
 
+    const navConns = document.getElementById('nav-connections');
+    const tabConns = document.getElementById('tab-connections');
+
     if (role === 'server') {
       // SERVER: show server config + ports, hide/disable client config
       setNavEnabled(navSrv,   true);
       setNavEnabled(navCli,   false);
       setNavEnabled(navPorts, true);
-      setTabAccessible(tabCli, false, 'server');
-      setTabAccessible(tabSrv, true,  'server');
-      setTabAccessible(tabPorts, true, 'server');
+      setNavEnabled(navConns, true);
+      setTabAccessible(tabCli,   false, 'server');
+      setTabAccessible(tabSrv,   true,  'server');
+      setTabAccessible(tabPorts, true,  'server');
+      setTabAccessible(tabConns, true,  'server');
     } else if (role === 'client') {
       // CLIENT: show client config, hide/disable server config + ports
       setNavEnabled(navSrv,   false);
       setNavEnabled(navCli,   true);
       setNavEnabled(navPorts, false);
+      setNavEnabled(navConns, false);
       setTabAccessible(tabSrv,   false, 'client');
       setTabAccessible(tabPorts, false, 'client');
       setTabAccessible(tabCli,   true,  'client');
+      setTabAccessible(tabConns, false, 'client');
     } else {
       // UNKNOWN: show everything
       setNavEnabled(navSrv,   true);
       setNavEnabled(navCli,   true);
       setNavEnabled(navPorts, true);
-      setTabAccessible(tabSrv,   true,  null);
-      setTabAccessible(tabCli,   true,  null);
-      setTabAccessible(tabPorts, true,  null);
+      setNavEnabled(navConns, true);
+      setTabAccessible(tabSrv,   true, null);
+      setTabAccessible(tabCli,   true, null);
+      setTabAccessible(tabPorts, true, null);
+      setTabAccessible(tabConns, true, null);
+    }
+
+    // ── Log selector: default to the relevant service ──────────────
+    const logSvc = document.getElementById('log-svc');
+    if (logSvc) {
+      if (role === 'client') logSvc.value = 'client';
+      else if (role === 'server') logSvc.value = 'server';
     }
 
     // ── YAML editor: set correct default + disable irrelevant option ──
@@ -4024,7 +5505,7 @@
       _connPollTimer = setInterval(loadConnections, 15000); // auto-refresh every 15s
     }
     if (id === 'security') loadCertInfo();
-    if (id === 'yaml' && !noLoad) loadConfig(document.getElementById('yaml-target').value);
+    if (id === 'yaml' && !noLoad && !_yamlIsPreview) loadConfig(document.getElementById('yaml-target').value);
   }
 
   // ── Parse server.yaml and populate all listener cards ────────
@@ -4221,7 +5702,7 @@
 
   function reloadAll() {
     loadStatus();
-    loadPortMaps();
+    if (NODE_ROLE !== 'client') loadPortMaps();
     showNotif('Refreshed', '↺');
   }
 
@@ -4277,9 +5758,26 @@
     }
   }
 
+  // Global polling timer refs so logout() can cancel them
+  let _statusPollTimer = null;
+  let _portMapPollTimer = null;
+
   function logout() {
     AUTH_TOKEN = '';
     sessionStorage.removeItem('dagger_token');
+    // Cancel every polling interval so 401 doesn't keep firing after logout
+    clearInterval(_statusPollTimer);
+    clearInterval(_portMapPollTimer);
+    clearInterval(logPollTimer);
+    clearInterval(netPollTimer);
+    _statusPollTimer = _portMapPollTimer = null;
+    // Stop WS reconnect loop
+    clearTimeout(wsReconnectTimer);
+    wsDisabled = true;
+    try { if (ws && ws.readyState < 2) ws.close(); } catch(_) {}
+    wsDisabled = false; // allow reconnect on next login
+    wsFailCount = 0;
+    setWsStatus('off');
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('login-token').value = '';
   }
@@ -4304,15 +5802,15 @@
     initListeners();
 
     loadStatus();
-    loadPortMaps();
+    if (NODE_ROLE !== 'client') loadPortMaps();
     loadCertInfo();
 
     // Load server-side metrics history (fills charts from server data)
     loadServerHistory();
 
     // Poll every 5s
-    setInterval(loadStatus, 5000);
-    setInterval(loadPortMaps, 30000);
+    _statusPollTimer  = setInterval(loadStatus,   5000);
+    if (NODE_ROLE !== 'client') _portMapPollTimer = setInterval(loadPortMaps, 30000);
   }
 
   // ── Auto-login if token in sessionStorage ──
@@ -5159,6 +6657,373 @@
     setYamlPreview(target, yaml, `Wizard output — /etc/DaggerConnect/${target}.yaml  (click Apply & Restart to save)`);
     showNotif('Wizard complete! Review YAML then click Apply & Restart', '🧙');
   }
+
+  // ═══════════════════════════════════════════════════════════
+  //  AUDIT LOG
+  // ═══════════════════════════════════════════════════════════
+  async function loadAuditLog() {
+    try {
+      const d = await api('/api/audit/log?limit=200');
+      const tbody = document.getElementById('audit-table');
+      if (!tbody) return;
+      if (!d.ok || !d.entries || !d.entries.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-mono text-sm" style="padding:14px">No audit entries yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.entries.map(e => {
+        const t = new Date(e.ts).toLocaleString();
+        const actionColor = e.action.includes('delete') || e.action.includes('clear') || e.action.includes('breach') ? 'var(--danger)' :
+                            e.action.includes('save') || e.action.includes('set') ? 'var(--accent3)' : 'var(--accent4)';
+        return `<tr>
+          <td class="text-mono" style="font-size:10px;white-space:nowrap">${t}</td>
+          <td><span class="badge" style="background:rgba(79,142,247,.1);color:${actionColor};font-size:9px">${escHtml(e.action)}</span></td>
+          <td class="text-mono text-sm">${escHtml(e.target || '—')}</td>
+          <td class="text-muted" style="font-size:11px">${escHtml(e.detail || '—')}</td>
+        </tr>`;
+      }).join('');
+    } catch(e) { console.warn('audit log failed', e); }
+  }
+
+
+  function formatBytes(b) {
+    if (!b) return '0 B';
+    if (b > 1e9) return (b/1e9).toFixed(1) + ' GB';
+    if (b > 1e6) return (b/1e6).toFixed(1) + ' MB';
+    if (b > 1e3) return (b/1e3).toFixed(1) + ' KB';
+    return b + ' B';
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  BANDWIDTH
+  // ═══════════════════════════════════════════════════════════
+  async function loadBandwidth() {
+    try {
+      const d = await api('/api/bandwidth/usage');
+      const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+      const today = d.periods?.today || {};
+      const week  = d.periods?.week  || {};
+      const month = d.periods?.month || {};
+      set('bw-today-rx', formatBytes(today.rx_bytes));
+      set('bw-today-tx', formatBytes(today.tx_bytes));
+      set('bw-today-total', formatBytes(today.total_bytes));
+      set('bw-week-total', formatBytes(week.total_bytes));
+      set('bw-month-total', formatBytes(month.total_bytes));
+      checkBandwidthAlarm();
+    } catch(e) { console.warn('bandwidth failed', e); }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  AUTH MANAGEMENT
+  // ═══════════════════════════════════════════════════════════
+  async function loadAuthStatus() {
+    try {
+      const d = await api('/api/auth/status');
+      const pill = document.getElementById('auth-status-pill');
+      if (pill) {
+        pill.className = d.auth_enabled ? 'pill pill-green mla' : 'pill pill-amber mla';
+        pill.innerHTML = d.auth_enabled ? '<div class="pdot pdot-g"></div> Auth Enabled' : '<div class="pdot pdot-a"></div> No Auth';
+      }
+    } catch(e) {}
+  }
+
+  async function setAuthToken() {
+    const token = document.getElementById('new-auth-token')?.value?.trim();
+    if (!token || token.length < 8) { showNotif('Token must be at least 8 characters', '⚠️'); return; }
+    const ok = await showConfirmModal('🔑 Set Auth Token', 'Set this token as the panel password? You will need it to log in. <strong>Save it somewhere safe.</strong>');
+    if (!ok) return;
+    try {
+      const d = await post('/api/auth/set_token', { token });
+      showNotif(d.msg || 'Token set', d.ok ? '✅' : '❌');
+      if (d.ok) { AUTH_TOKEN = token; loadAuthStatus(); }
+    } catch(e) { showNotif('API error', '❌'); }
+  }
+
+  async function clearAuthToken() {
+    const ok = await showConfirmModal('🗑 Clear Auth Token', 'Remove authentication? Anyone with panel access can control DaggerConnect without a password.');
+    if (!ok) return;
+    try {
+      const d = await post('/api/auth/clear_token', {});
+      showNotif(d.msg || 'Token cleared', d.ok ? '✅' : '❌');
+      if (d.ok) loadAuthStatus();
+    } catch(e) { showNotif('API error', '❌'); }
+  }
+
+  function generateAuthToken() {
+    const arr = new Uint8Array(24);
+    crypto.getRandomValues(arr);
+    const tok = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    const el = document.getElementById('new-auth-token');
+    if (el) { el.value = tok; el.type = 'text'; }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  RESOURCE QUOTA
+  // ═══════════════════════════════════════════════════════════
+  async function loadQuotaConfig() {
+    try {
+      const d = await api('/api/quota/config');
+      const cfg = d.config || d || {};
+      const cpuEl = document.getElementById('quota-max-cpu');
+      const memEl = document.getElementById('quota-max-mem');
+      const togEl = document.getElementById('quota-enabled-toggle');
+      const alarmEl = document.getElementById('quota-alarm-banner');
+      if (cpuEl && (cfg.max_cpu_pct !== undefined && cfg.max_cpu_pct !== null)) cpuEl.value = cfg.max_cpu_pct;
+      if (memEl && (cfg.max_mem_mb !== undefined && cfg.max_mem_mb !== null)) memEl.value = cfg.max_mem_mb;
+      if (togEl) {
+        if (cfg.enabled === true || cfg.enabled === 'true' || cfg.enabled === '1' || cfg.enabled === 1) togEl.classList.add('on');
+        else togEl.classList.remove('on');
+      }
+      if (alarmEl) {
+        const alarm = d.alarm || cfg.alarm;
+        if (alarm && alarm.type !== 'bandwidth') {
+          // Only show CPU/RAM alarms here, bandwidth goes to dashboard
+          alarmEl.style.display = 'flex';
+          let alarmMsg = '';
+          if (alarm.type === 'cpu') {
+            alarmMsg = `${escHtml(alarm.service || '')} exceeded CPU limit (${alarm.value}%)`;
+          } else {
+            alarmMsg = `${escHtml(alarm.service || '')} exceeded RAM limit (${alarm.value} MB)`;
+          }
+          alarmEl.innerHTML = `<span style="font-size:16px">⚠️</span><div><strong>Quota Alarm:</strong> ${alarmMsg}</div><button class="btn btn-ghost" style="font-size:10px;margin-left:auto" onclick="clearQuotaAlarm()">Dismiss</button>`;
+        } else {
+          alarmEl.style.display = 'none';
+        }
+      }
+      const tbody = document.getElementById('quota-events-table');
+      if (tbody) {
+        const events = d.events || cfg.events || [];
+        if (events.length) {
+          tbody.innerHTML = events.map(e => {
+            const t = new Date(e.ts).toLocaleString();
+            let detail = e.detail || '—';
+            try { const obj = JSON.parse(detail); detail = `${obj.svc || ''} cpu=${obj.cpu ?? '?'}% mem=${obj.mem ?? '?'}MB`; } catch(_) {}
+            const isAlarm = (e.event||'').toLowerCase().includes('exceed') || (e.event||'').toLowerCase().includes('kill') || (e.event||'').toLowerCase().includes('restart');
+            return `<tr><td class="text-mono" style="font-size:10px">${t}</td><td class="text-mono text-sm" style="${isAlarm ? 'color:var(--warn)' : ''}">${escHtml(e.event || '')}</td><td class="text-sm">${escHtml(detail)}</td></tr>`;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-mono text-sm" style="padding:14px">No events yet.</td></tr>';
+        }
+      }
+    } catch(e) { console.warn('quota config failed', e); showNotif('Failed to load quota config', '❌'); }
+  }
+
+  async function clearQuotaAlarm() {
+    try { await post('/api/quota/clear_alarm', {}); } catch(_) {}
+    const alarmEl = document.getElementById('quota-alarm-banner');
+    if (alarmEl) alarmEl.style.display = 'none';
+    const bwAlarmEl = document.getElementById('bandwidth-alarm-banner');
+    if (bwAlarmEl) bwAlarmEl.style.display = 'none';
+  }
+
+  async function saveQuotaConfig() {
+    const cpuVal = document.getElementById('quota-max-cpu')?.value;
+    const memVal = document.getElementById('quota-max-mem')?.value;
+    const max_cpu_pct = cpuVal !== '' ? parseFloat(cpuVal) : 0;
+    const max_mem_mb = memVal !== '' ? parseInt(memVal) : 0;
+    const enabled = document.getElementById('quota-enabled-toggle')?.classList.contains('on') ? 'true' : 'false';
+    if (isNaN(max_cpu_pct) || isNaN(max_mem_mb)) { showNotif('Invalid values', '❌'); return; }
+    try {
+      const resp = await post('/api/quota/config', { max_cpu_pct, max_mem_mb, enabled });
+      showNotif(resp.msg || 'Saved', (resp.ok !== false) ? '✅' : '❌');
+    } catch(e) { showNotif('API error', '❌'); }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  PANEL HEALTH CHECK
+  // ═══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
+  //  CONFIG BACKUPS / RESTORE
+  // ═══════════════════════════════════════════════════════════
+  async function showConfigBackups(target) {
+    try {
+      const d = await api(`/api/config/backups?target=${target}`);
+      if (!d.ok || !d.backups || !d.backups.length) {
+        showNotif('No backups found for ' + target + ' config', 'ℹ️');
+        return;
+      }
+      const items = d.backups.map(b => {
+        const dt = new Date(b.mtime).toLocaleString();
+        const kb = (b.size / 1024).toFixed(1);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="flex:1">
+            <div class="text-mono" style="font-size:11px">${escHtml(b.name)}</div>
+            <div class="text-muted" style="font-size:10px">${dt} · ${kb} KB</div>
+          </div>
+          <button class="btn btn-ghost" style="font-size:10px" onclick="previewBackupInEditor('${escHtml(b.path)}','${target}')">👁 Preview in Editor</button>
+        </div>`;
+      }).join('');
+      const modal = document.createElement('div');
+      modal.className = 'modal-ov open';
+      modal.innerHTML = `<div class="modal" style="max-width:520px"><div class="modal-head"><span>💾</span><h3>Config Backups — ${target}.yaml</h3><div class="icn-btn mla" onclick="this.closest('.modal-ov').remove()">✕</div></div><div class="modal-body"><p style="font-size:11px;color:var(--text2);margin-bottom:14px">Click "Preview in Editor" to load a backup into the YAML editor. Review and save from there to apply.</p>${items}</div><div class="modal-foot"><button class="btn btn-ghost" onclick="this.closest('.modal-ov').remove()">Close</button></div></div>`;
+      document.body.appendChild(modal);
+    } catch(e) { showNotif('Failed to load backups', '❌'); }
+  }
+
+  async function previewBackupInEditor(backupPath, target) {
+    try {
+      document.querySelectorAll('.modal-ov.open').forEach(m => m.remove());
+      const d = await api(`/api/config/backup_content?path=${encodeURIComponent(backupPath)}`);
+      const content = d.content || d.yaml || '';
+      if (!content) { showNotif('Backup is empty or unreadable', '❌'); return; }
+      document.getElementById('yaml-target').value = target;
+      document.getElementById('yaml-editor').value = content;
+      typeof onYamlInput === 'function' && onYamlInput();
+      // Set preview state
+      _yamlIsPreview = true;
+      _yamlIsDirty = true;
+      const banner = document.getElementById('yaml-preview-banner');
+      const bannerTitle = document.getElementById('yaml-preview-title');
+      const bannerSub = document.getElementById('yaml-preview-subtitle');
+      if (banner) {
+        banner.style.display = 'flex';
+        banner.style.background = 'rgba(244,161,24,.07)';
+        banner.style.border = '1px solid rgba(244,161,24,.25)';
+        banner.style.borderRadius = '9px';
+        if (bannerTitle) bannerTitle.textContent = `Previewing backup: ${backupPath.split('/').pop()}`;
+        if (bannerSub) bannerSub.textContent = 'Review the YAML below. Click Save & Restart to apply, or Discard to revert to disk.';
+      }
+      showNotif('Backup loaded into editor — review before saving', '👁');
+      switchTab('yaml', true); // noLoad=true to prevent overwriting
+    } catch(e) { showNotif('Failed to load backup content', '❌'); }
+  }
+
+  async function restoreConfigBackup(path, target) {
+    const ok = await showConfirmModal('Restore Backup', `Restore <code>${path}</code> to ${target}.yaml? Current config will be backed up first.`);
+    if (!ok) return;
+    try {
+      const d = await post('/api/config/restore', { backup_path: path, target });
+      showNotif(d.msg || 'Restored', d.ok ? '✅' : '❌');
+      if (d.ok) {
+        document.querySelectorAll('.modal-ov.open').forEach(m => m.remove());
+        loadConfig(target);
+      }
+    } catch(e) { showNotif('Restore failed', '❌'); }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  CONFIG BUNDLE EXPORT / IMPORT
+  // ═══════════════════════════════════════════════════════════
+  async function exportConfigBundle() {
+    try {
+      showNotif('Preparing export…', '⏳');
+      const d = await api('/api/config/export');
+      if (!d.ok) { showNotif('Export failed: ' + d.msg, '❌'); return; }
+      const json = JSON.stringify(d.bundle, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'daggerconnect-config-bundle-' + new Date().toISOString().slice(0,10) + '.json';
+      a.click();
+      showNotif('Config bundle exported', '📦');
+    } catch(e) { showNotif('Export failed', '❌'); }
+  }
+
+  async function importConfigBundle() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const ok = await showConfirmModal('Import Config Bundle', 'Import and overwrite config files from bundle? Current configs will be backed up first.');
+      if (!ok) return;
+      const reader = new FileReader();
+      reader.onload = async evt => {
+        try {
+          const bundle = JSON.parse(evt.target.result);
+          const d = await post('/api/config/import', { bundle });
+          showNotif(d.ok ? `Imported ${d.count} files` : (d.msg || 'Import failed'), d.ok ? '✅' : '❌');
+        } catch(err) { showNotif('Invalid JSON bundle', '❌'); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  SCHEDULED RESTART
+  // ═══════════════════════════════════════════════════════════
+  async function scheduleRestart(svc) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-ov open';
+    modal.id = 'sched-restart-modal';
+    modal.innerHTML = `<div class="modal" style="max-width:520px">
+      <div class="modal-head"><span>⏰</span><h3>Schedule Restart — ${svc}</h3><div class="icn-btn mla" onclick="this.closest('.modal-ov').remove()">✕</div></div>
+      <div class="modal-body">
+        <p style="font-size:11px;color:var(--text2);margin-bottom:12px">Set up a recurring restart schedule for this service (cron-like). The service will restart automatically at the specified interval.</p>
+        <div class="form-row2">
+          <div class="form-group"><label>Interval (minutes)</label><input type="number" id="sched-delay" value="30" min="1" max="1440" placeholder="e.g., 30"></div>
+          <div class="form-group"><label>Reason</label><input type="text" id="sched-reason" placeholder="e.g. maintenance" value="scheduled"></div>
+        </div>
+        <div id="sched-pending-list" style="margin-top:4px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-ov').remove()">Cancel</button>
+        <button class="btn btn-primary mla" onclick="confirmScheduleRestart('${svc}',this)">⏰ Schedule</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    loadPendingSchedules(svc);
+  }
+
+  async function loadPendingSchedules(svc) {
+    const listEl = document.getElementById('sched-pending-list');
+    if (!listEl) return;
+    try {
+      const d = await api(`/api/service/scheduled_restarts?service=${svc}`);
+      const items = d.schedules || d.pending || [];
+      if (!items.length) { listEl.innerHTML = ''; return; }
+      listEl.innerHTML = `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-family:'Geist Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">📋 Active Schedules</div>
+        ${items.map(s => {
+          const fireAt = s.fire_at ? new Date(s.fire_at * 1000).toLocaleTimeString() : 'N/A';
+          const delayMin = s.delay_seconds ? Math.round(s.delay_seconds / 60) : 0;
+          const created = s.created_ts ? new Date(s.created_ts).toLocaleString() : 'Unknown';
+          return `<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:13px">⏰</span>
+              <span style="font-size:12px;font-weight:600;color:var(--text);flex:1">${escHtml(s.reason || 'Scheduled restart')}</span>
+              <button class="btn btn-danger" style="padding:3px 10px;font-size:10px" onclick="cancelScheduledRestart('${svc}','${s.id || s.job_id || ''}',this)">✕ Cancel</button>
+            </div>
+            <div style="font-family:'Geist Mono',monospace;font-size:10px;color:var(--text2);display:flex;flex-direction:column;gap:3px;padding-left:21px">
+              <div>⟳ Every <span style="color:var(--accent)">${delayMin} minutes</span></div>
+              <div>⏱ Next run: <span style="color:var(--accent3)">${fireAt}</span></div>
+              <div>📅 Created: <span style="color:var(--text3)">${created}</span></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    } catch(_) { listEl.innerHTML = ''; }
+  }
+
+  async function cancelScheduledRestart(svc, jobId, btn) {
+    try {
+      const d = await post('/api/service/cancel_restart', { service: svc, job_id: jobId });
+      showNotif(d.msg || 'Cancelled', d.ok !== false ? '✅' : '❌');
+      loadPendingSchedules(svc);
+    } catch(e) { showNotif('Failed to cancel', '❌'); }
+  }
+
+  async function confirmScheduleRestart(svc, btn) {
+    const delayMinutes = parseInt(document.getElementById('sched-delay')?.value) || 30;
+    const reason = document.getElementById('sched-reason')?.value?.trim() || 'scheduled';
+    const delay = delayMinutes * 60; // Convert minutes to seconds for backend
+    btn.closest('.modal-ov').remove();
+    try {
+      const d = await post('/api/service/schedule_restart', { service: svc, delay_seconds: delay, reason });
+      showNotif(d.msg || `Restart scheduled every ${delayMinutes} minutes`, d.ok !== false ? '✅' : '❌');
+    } catch(e) { showNotif('Failed to schedule', '❌'); }
+  }
+
+  // Hook into tab switches to lazy-load new tabs
+  const _origSwitchTab = switchTab;
+  switchTab = function(tab, noSave) {
+    _origSwitchTab(tab, noSave);
+    if (tab === 'audit') loadAuditLog();
+    if (tab === 'bandwidth') loadBandwidth();
+    if (tab === 'auth-mgmt') loadAuthStatus();
+    if (tab === 'quota') loadQuotaConfig();
+  };
 </script>
 </body>
 </html>
