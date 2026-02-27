@@ -2,7 +2,7 @@
 # ============================================================
 # DaggerConnect Control Panel — Installer / Updater / Uninstaller
 # Usage:
-#   Install / Update : sudo bash daggerconnect-panel.sh
+#   Install / Update : sudo bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)
 #   Uninstall        : sudo bash daggerconnect-panel.sh uninstall
 #   Change password  : sudo bash daggerconnect-panel.sh change-password
 # ============================================================
@@ -10,6 +10,7 @@
 INSTALL_DIR="/opt/daggerconnect-panel"
 GITHUB_REPO="itsFLoKi/daggerconnect-panel"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+GITHUB_RAW_MAIN="https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh"
 FILES=(panel.html api.sh start.sh)
 
 SOCAT_PORT=7070
@@ -24,12 +25,68 @@ LOG_FILE="/tmp/daggerconnect-panel.log"
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'; CYN='\033[0;36m'; NC='\033[0m'
 
+# ============================================================
+# SELF-UPDATE CHECK — warn if running a local copy that may be outdated
+# ============================================================
+_self_update_check() {
+  # Only makes sense when run as a real file on disk, not piped/process-substituted
+  local SCRIPT_PATH
+  SCRIPT_PATH=$(realpath "$0" 2>/dev/null)
+
+  # If $0 is not a real file path (e.g. /dev/fd/... or /proc/...), skip check
+  if [[ ! -f "$SCRIPT_PATH" ]]; then
+    return 0
+  fi
+
+  echo -e "${CYN}── Checking for installer updates ──${NC}"
+
+  local REMOTE_SCRIPT
+  REMOTE_SCRIPT=$(curl -fsSL --max-time 10 "$GITHUB_RAW_MAIN" 2>/dev/null)
+
+  if [[ -z "$REMOTE_SCRIPT" ]]; then
+    warn_msg "Could not reach GitHub to check for installer updates — continuing with local copy"
+    return 0
+  fi
+
+  local LOCAL_HASH REMOTE_HASH
+  LOCAL_HASH=$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')
+  REMOTE_HASH=$(echo "$REMOTE_SCRIPT" | sha256sum | awk '{print $1}')
+
+  if [[ "$LOCAL_HASH" == "$REMOTE_HASH" ]]; then
+    ok_msg "Installer is up to date"
+    return 0
+  fi
+
+  echo ""
+  warn_msg "Your local install.sh differs from the latest version on GitHub."
+  echo ""
+  echo -e "  It is recommended to use the latest installer to avoid issues."
+  echo -e "  ${CYN}You can always run the latest directly with:${NC}"
+  echo -e "  sudo bash <(curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh)"
+  echo ""
+  read -rp "  Update local file and re-launch? [Y/n]: " UPDATE_CHOICE
+  UPDATE_CHOICE="${UPDATE_CHOICE:-y}"
+
+  if [[ "$UPDATE_CHOICE" =~ ^[Yy]$ ]]; then
+    echo "$REMOTE_SCRIPT" > "$SCRIPT_PATH"       && ok_msg "Installer updated → $SCRIPT_PATH"       || { warn_msg "Could not write to $SCRIPT_PATH — re-run with: sudo bash <(curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh)"; return 1; }
+    echo ""
+    echo -e "${CYN}Re-launching updated installer...${NC}"
+    echo ""
+    exec bash "$SCRIPT_PATH" "$@"
+  else
+    warn_msg "Continuing with local (possibly outdated) installer"
+  fi
+}
+
+
 die()      { echo -e "${RED}✗ $1${NC}"; exit 1; }
 ok_msg()   { echo -e "${GRN}✓ $1${NC}"; }
 warn_msg() { echo -e "${YLW}⚠ $1${NC}"; }
 section()  { echo ""; echo -e "${CYN}── $1 ──${NC}"; }
+_self_update_check "$@"
 
-[[ $EUID -ne 0 ]] && die "Must run as root: sudo bash daggerconnect-panel.sh"
+
+[[ $EUID -ne 0 ]] && die "Must run as root: sudo bash <(curl -fsSL https://raw.githubusercontent.com/itsFLoKi/daggerconnect-panel/main/install.sh)"
 
 echo -e "${CYN}"
 echo "  ██████╗  █████╗  ██████╗  ██████╗ ███████╗██████╗ "
@@ -454,28 +511,33 @@ if $IS_UPDATE; then
     && ok_msg "Service restarted" \
     || die "Service failed to restart — check: journalctl -u daggerconnect-panel"
 else
-  section "Installing systemd service"
-  cat > /etc/systemd/system/daggerconnect-panel.service <<EOF
-[Unit]
-Description=DaggerConnect Control Panel
-After=network.target
+  # ── Create panel data directory and files ───────────────────
+  section "Creating panel data files"
+  mkdir -p /etc/DaggerConnect
+  chmod 750 /etc/DaggerConnect
 
-[Service]
-Type=simple
-ExecStart=/bin/bash ${INSTALL_DIR}/start.sh
-Restart=on-failure
-RestartSec=5
-User=root
+  # Generate token if it does not exist
+  if [[ ! -f "$TOKEN_FILE" ]]; then
+    TOKEN=$(openssl rand -hex 32)
+    echo "$TOKEN" > "$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+    ok_msg "Generated panel token → $TOKEN_FILE"
+  else
+    ok_msg "Panel token already exists — keeping"
+  fi
 
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  systemctl daemon-reload
-  systemctl enable daggerconnect-panel 2>/dev/null
-  systemctl restart daggerconnect-panel 2>/dev/null \
-    && ok_msg "Service enabled and started" \
-    || die "Service failed to start — check: journalctl -u daggerconnect-panel"
+  # Determine and write role file
+  if [[ ! -f "$ROLE_FILE" ]]; then
+    if [[ -f "/etc/DaggerConnect/server.yaml" ]]; then
+      echo "server" > "$ROLE_FILE"
+    else
+      echo "client" > "$ROLE_FILE"
+    fi
+    chmod 600 "$ROLE_FILE"
+    ok_msg "Role file written → $ROLE_FILE ($(cat "$ROLE_FILE"))"
+  else
+    ok_msg "Role file already exists — keeping ($(cat "$ROLE_FILE"))"
+  fi
 
   # ── nginx setup ─────────────────────────────────────────────
   section "Setting up nginx"
@@ -650,9 +712,31 @@ NGINX
     warn_msg "ufw not found — open ports $PANEL_PORT and 80 in your cloud provider's firewall"
   fi
 
+  # ── Install and start systemd service ──────────────────────
+  section "Installing systemd service"
+  cat > /etc/systemd/system/daggerconnect-panel.service <<EOF
+[Unit]
+Description=DaggerConnect Control Panel
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash ${INSTALL_DIR}/start.sh
+Restart=on-failure
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable daggerconnect-panel 2>/dev/null
+  systemctl restart daggerconnect-panel 2>/dev/null     && ok_msg "Service enabled and started"     || warn_msg "Service failed to start — check: journalctl -u daggerconnect-panel"
+
   # ── Post-setup healthcheck ──────────────────────────────────
   section "Healthcheck"
-  sleep 1
+  sleep 2
   HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
     --max-time 5 "https://localhost:${PANEL_PORT}/" 2>/dev/null || echo "000")
   if [[ "$HTTP_CODE" == "401" ]]; then

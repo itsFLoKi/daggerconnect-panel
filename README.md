@@ -1,4 +1,4 @@
-# DaggerConnect Control Panel v1.1.1
+# DaggerConnect Control Panel v1.1.0
 
 A secure, browser-based control panel for managing [DaggerConnect](https://github.com/itsFLoKi/daggerconnect) tunnel nodes. Supports server/client role awareness, all transport protocols, live metrics, config management, and HTTPS with two-layer authentication — all served by a hardened nginx reverse proxy.
 
